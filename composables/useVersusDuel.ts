@@ -59,13 +59,17 @@ const SPARK_LIFE = 0.25 // seconds
 const SPARK_DRAG = 9
 const CLASH_FLASH = 0.08 // seconds the contact flash stays visible
 const CLASH_HIT_STOP = 0.05
-const RIPOSTE_GLOW = '#fee761' // inner gold ring on a blade with a riposte ready
-const RIPOSTE_GLOW_OUTER = '#f77622' // outer orange ring
+/** Riposte ready: a swing trail behind the blade, swept over its last few step
+ *  poses. Colors go newest → oldest. */
+const RIPOSTE_TRAIL_STEPS = 6
+const RIPOSTE_TRAIL_COLORS = ['#ffffff', '#fee761', '#feae34', '#f77622']
+const RIPOSTE_TRAIL_INNER = 0.35 // trail covers the blade from 35% of its length to the tip
 
 /** Per-source hit-flash (Req 16.5, 16.6): a 32×32 pixel sprite at the impact,
- *  shaped differently per source (weapon = slash, projectile = cross burst). */
+ *  shaped differently per source (projectile = cross burst). Weapon hits have
+ *  none: their blood burst is the feedback. */
 const HIT_FLASH = 0.2 // seconds, within the required 50–500 ms
-const HIT_FLASH_SPRITE = { weapon: 'fx:hit-weapon', projectile: 'fx:hit-projectile' } as const
+const HIT_FLASH_SPRITE = { projectile: 'fx:hit-projectile' } as const
 
 interface Particle {
   x: number
@@ -116,7 +120,7 @@ export function useVersusDuel(
   opts?: VersusOptions,
 ): VersusDuel {
   const reduced = !!opts?.reducedMotion
-  const { preloadAll, drawSprite, drawSpriteSilhouette } = useSprites()
+  const { preloadAll, drawSprite } = useSprites()
   const { preloadFont, drawText } = usePixelFont()
 
   const view: VersusView = {
@@ -137,6 +141,8 @@ export function useVersusDuel(
   let pendingSlam: { ballId: EntityId; x: number; y: number } | null = null
   // Entity state before the latest step, for render interpolation.
   let prev = new Map<EntityId, { x: number; y: number; angle: number }>()
+  // Riposte trail: per weapon, its grip anchor + angle before each recent step (oldest first).
+  let trails = new Map<EntityId, Array<{ x: number; y: number; angle: number }>>()
 
   function build(): void {
     engine = createEngine({
@@ -359,6 +365,15 @@ export function useVersusDuel(
         y: e.position.y,
         angle: e.kind === 'weapon' ? e.angle : 0,
       })
+      if (e.kind !== 'weapon') continue
+      if (e.riposteSteps <= 0 || !e.alive) {
+        trails.delete(e.id)
+        continue
+      }
+      const trail = trails.get(e.id) ?? []
+      trail.push({ ...gripAnchor(e), angle: e.angle })
+      if (trail.length > RIPOSTE_TRAIL_STEPS) trail.shift()
+      trails.set(e.id, trail)
     }
   }
 
@@ -438,38 +453,62 @@ export function useVersusDuel(
     const spriteId = w.def.spriteId
     // Summoners (Shuriken) have no blade to draw; their shurikens are projectiles.
     if (!spriteId || w.def.summon) return
-    const owner = engine!.world.ballById(w.ownerId)
-    const pivot = w.def.pivot
-    // Anchor the grip at the ball surface along the weapon angle, so the
-    // weapon hugs the ball and the blade sweeps outward as it orbits
-    // (visually "held but rotating").
-    const anchorX = owner
-      ? owner.position.x + Math.cos(w.angle) * owner.radius
-      : w.position.x
-    const anchorY = owner
-      ? owner.position.y + Math.sin(w.angle) * owner.radius
-      : w.position.y
+    const anchor = gripAnchor(w)
     // Scale so the drawn grip→tip span equals the engine's weapon length:
     // what you see is exactly the hitbox.
     const scale = w.def.spriteReach ? w.def.length / w.def.spriteReach : 2
-    // Riposte ready: a pulsing gold glow — two pixel rings (outer orange,
-    // inner gold) all round the blade, including diagonals.
-    if (w.riposteSteps > 0) {
-      const pulse = reduced ? 1 : 0.8 + 0.2 * Math.sin(engine!.world.tick * 0.5)
-      const o = Math.max(1, Math.round(scale)) // one sprite pixel
-      const ring = (d: number) => [[d, 0], [-d, 0], [0, d], [0, -d], [d, d], [-d, d], [d, -d], [-d, -d]] as const
-      ctx.save()
-      ctx.globalAlpha = 0.6 * pulse
-      for (const [dx, dy] of ring(2 * o)) {
-        drawSpriteSilhouette(ctx, spriteId, anchorX + dx, anchorY + dy, scale, w.angle, pivot, RIPOSTE_GLOW_OUTER)
-      }
-      ctx.globalAlpha = pulse
-      for (const [dx, dy] of ring(o)) {
-        drawSpriteSilhouette(ctx, spriteId, anchorX + dx, anchorY + dy, scale, w.angle, pivot, RIPOSTE_GLOW)
-      }
-      ctx.restore()
+    if (w.riposteSteps > 0) drawRiposteTrail(ctx, w, anchor)
+    drawSprite(ctx, spriteId, anchor.x, anchor.y, scale, w.angle, w.def.pivot)
+  }
+
+  /** Anchor the grip at the ball surface along the weapon angle, so the
+   *  weapon hugs the ball and the blade sweeps outward as it orbits
+   *  (visually "held but rotating"). */
+  function gripAnchor(w: WeaponEntity): { x: number; y: number } {
+    const owner = engine!.world.ballById(w.ownerId)
+    if (!owner) return { x: w.position.x, y: w.position.y }
+    return {
+      x: owner.position.x + Math.cos(w.angle) * owner.radius,
+      y: owner.position.y + Math.sin(w.angle) * owner.radius,
     }
-    drawSprite(ctx, spriteId, anchorX, anchorY, scale, w.angle, pivot)
+  }
+
+  /**
+   * Riposte ready: a fast-swing trail. Sweeps 2px pixels over the outer part
+   * of the blade between its current pose and its poses before the last few
+   * steps, fading and cooling (white → orange) with age. Render-only.
+   */
+  function drawRiposteTrail(ctx: CanvasRenderingContext2D, w: WeaponEntity, head: { x: number; y: number }): void {
+    const history = trails.get(w.id)
+    if (!history?.length) return
+    const poses = [{ ...head, angle: w.angle }, ...[...history].reverse()] // newest first
+    const len = w.def.length
+    const dTheta = 2 / len // ≈ 2px apart at the tip
+    ctx.save()
+    for (let i = 0; i < poses.length - 1; i++) {
+      const a = poses[i]!
+      const b = poses[i + 1]!
+      // Shortest way round, so a wrap at ±π doesn't sweep the whole circle.
+      const span = Math.atan2(Math.sin(b.angle - a.angle), Math.cos(b.angle - a.angle))
+      const n = Math.max(1, Math.ceil(Math.abs(span) / dTheta))
+      ctx.fillStyle = RIPOSTE_TRAIL_COLORS[Math.min(i, RIPOSTE_TRAIL_COLORS.length - 1)]!
+      for (let s = 0; s < n; s++) {
+        const t = s / n
+        const age = (i + t) / (poses.length - 1) // 0 = newest, 1 = oldest
+        ctx.globalAlpha = 0.7 * (1 - age)
+        const ang = a.angle + span * t
+        const ox = a.x + (b.x - a.x) * t
+        const oy = a.y + (b.y - a.y) * t
+        const ux = Math.cos(ang)
+        const uy = Math.sin(ang)
+        // Thinner toward the old end: the inner edge creeps out to the tip.
+        const inner = len * (RIPOSTE_TRAIL_INNER + (1 - RIPOSTE_TRAIL_INNER) * age * 0.6)
+        for (let r = inner; r <= len; r += 2) {
+          ctx.fillRect(Math.round(ox + ux * r - 1), Math.round(oy + uy * r - 1), 2, 2)
+        }
+      }
+    }
+    ctx.restore()
   }
 
   function drawProjectile(ctx: CanvasRenderingContext2D, p: Projectile): void {
@@ -629,6 +668,7 @@ export function useVersusDuel(
     acc = 0
     hitStop = 0
     prev = new Map()
+    trails = new Map()
     particles = []
     flashes = []
     hitFlashes = []

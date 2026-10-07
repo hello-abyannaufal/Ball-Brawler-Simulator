@@ -127,17 +127,12 @@ const blasterShotProc: ProceduralDraw = (ctx) => {
   px(ctx, 1, 3, 1, 2, C.blue)
 }
 
-// ---- Hit-flash: distinct by SHAPE (round / slash / diamond) ----
+// ---- Hit-flash: distinct by SHAPE (round / diamond) ----
 const hitContactProc: ProceduralDraw = (ctx, w, h) => {
   ctx.fillStyle = C.white
   for (let a = 0; a < 8; a++) {
     const ang = (a / 8) * Math.PI * 2
     px(ctx, Math.round(w / 2 + Math.cos(ang) * 8) - 1, Math.round(h / 2 + Math.sin(ang) * 8) - 1, 2, 2, C.white)
-  }
-}
-const hitWeaponProc: ProceduralDraw = (ctx, w, h) => {
-  for (let i = 0; i < w; i++) {
-    px(ctx, i, Math.round((i / w) * h), 2, 2, C.gold)
   }
 }
 const hitProjectileProc: ProceduralDraw = (ctx, w, h) => {
@@ -183,7 +178,6 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
 
   // Hit-flash FX.
   'fx:hit-contact': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hitContactProc },
-  'fx:hit-weapon': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hitWeaponProc },
   'fx:hit-projectile': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hitProjectileProc },
 
   // Weapon icons (plain silhouette).
