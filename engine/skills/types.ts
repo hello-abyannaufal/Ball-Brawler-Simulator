@@ -5,9 +5,13 @@ import type { DamageSource } from '../damage'
 export interface SkillContext {
   ball: Ball
   world: World
+  /** Resolved instance config (definition defaults merged with ref overrides). */
+  config: Record<string, number>
   source?: DamageSource // readable on damage-driven hooks (Req 9.3)
   dealt?: { targetId: EntityId; amount: number }
   taken?: { attackerId: EntityId | ''; amount: number }
+  /** Mutable per-instance state (e.g. Blaster firing timer). */
+  state: Record<string, number>
 }
 
 /** Only these five hooks exist (Req 9.2). */

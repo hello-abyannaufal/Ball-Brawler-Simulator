@@ -109,11 +109,11 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - Damage_Source union lists active and reserved members (6.4, 6.5); summon crediting via `summonOwnerId` (6.8).
     - _Requirements: 6.4, 6.5, 6.8_
 
-- [ ] 9. Phase 3 — Status effects and hit cooldowns
-  - [ ] 9.1 Implement status-effect system
+- [x] 9. Phase 3 — Status effects and hit cooldowns
+  - [x] 9.1 Implement status-effect system
     - Create `engine/status.ts`: `StatusEffect` (`remaining` ≥ 0 whole timesteps, `tickInterval` ≥ 1, `sinceLastTick`, `onTick`); `runStatusEffects(world)` decrements duration by one per step, fires tick once each time `sinceLastTick` reaches the interval (resetting it), removes the effect when duration reaches zero.
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
-  - [ ] 9.2 Implement hit-cooldown table
+  - [x] 9.2 Implement hit-cooldown table
     - Create `engine/cooldown.ts`: `CooldownTable` keyed by ordered `(attackerId, targetId)` pair with `isActive`, `start(duration)`, `decrementAll()` (one timestep per step). While active, a repeated hit for the pair applies no damage, knockback, or status change.
     - _Requirements: 7.5, 7.6, 7.7, 7.8_
   - [ ]* 9.3 Write property test for status-effect lifecycle
@@ -123,8 +123,8 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - **Property 9: Hit cooldown prevents repeat interactions**
     - **Validates: Requirements 7.7, 7.8, 10.7**
 
-- [ ] 10. Phase 3 — Ball and arena physics
-  - [ ] 10.1 Implement physics and collision math
+- [x] 10. Phase 3 — Ball and arena physics
+  - [x] 10.1 Implement physics and collision math
     - Create `engine/physics.ts`: `resolveWallCollision` (negate normal component, reposition tangent, keep ball in bounds, return true on bounce); `ballsOverlap`; `separateBalls` (push apart along center line until tangent); `applyKnockback` (impulse along striker→struck center line). Hand-written circle math, no physics library.
     - _Requirements: 8.1, 8.2, 8.4, 8.6_
   - [ ]* 10.2 Write property test for free-flight integration
@@ -137,8 +137,8 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - **Property 13: Ball separation restores tangency**
     - **Validates: Requirements 8.4**
 
-- [ ] 11. Phase 3 — Engine step loop, win condition, and engineVersion
-  - [ ] 11.1 Implement the engine lifecycle and fixed-order step
+- [x] 11. Phase 3 — Engine step loop, win condition, and engineVersion
+  - [x] 11.1 Implement the engine lifecycle and fixed-order step
     - Create `engine/engine.ts`: `engineVersion` (non-empty string), `TIMESTEP = 1/60`, `EngineOptions`, `Engine`, `createEngine(opts)` (builds World from config, validates seed, resolves skill/weapon ids). `step()` runs the seven operations exactly once each in order: (1) move balls+weapons, (2) detect collisions, (3) resolve weapon clashes, (4) apply damage, (5) apply knockback, (6) run status effects, (7) check win condition. Wire wall-bounce to fire `onWallBounce` once per bounce; contact collisions route through `applyDamage` with source `contact` and start the pair cooldown; emit `matchEnded` for one-alive winner, zero-alive null winner, never while ≥2 alive.
     - _Requirements: 5.4, 5.5, 5.7, 5.8, 8.3, 8.5, 8.7, 8.8, 8.9_
   - [ ]* 11.2 Write property test for fixed step order
@@ -160,17 +160,17 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - Fixed-config, fixed-seed run twice to completion asserting byte-identical winner + every final HP (5.6); `engineVersion` non-empty (5.8); `TIMESTEP` equals 1/60 (5.4); boundary check asserting `engine/` has zero Vue/Nuxt imports and no `Math.random`/wall-clock (5.1, 5.3).
     - _Requirements: 5.1, 5.3, 5.4, 5.6, 5.8_
 
-- [ ] 12. Checkpoint — Phase 3 engine core complete
+- [x] 12. Checkpoint — Phase 3 engine core complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 13. Phase 4 — Skill system and starter skills
-  - [ ] 13.1 Implement skill types and registry
+- [x] 13. Phase 4 — Skill system and starter skills
+  - [x] 13.1 Implement skill types and registry
     - Create `engine/skills/types.ts` (`SkillContext` with readable `source` on damage-driven hooks, `SkillDefinition` with only hooks `onTick`/`onHit`/`onHurt`/`onWallBounce`/`onDeath`, `SkillInstance`) and `engine/skills/registry.ts` (`SkillRegistry` rejecting duplicate/empty ids; `skillRegistry` singleton). Wire the engine to resolve ball-config skill ids against the registry, rejecting unknown ids with an error naming the id, and to emit exactly one `skillTriggered` event per triggered skill.
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
   - [ ]* 13.2 Write property test for skillTriggered emission
     - **Property 16: Each skill trigger emits exactly one skillTriggered event**
     - **Validates: Requirements 9.4**
-  - [ ] 13.3 Implement the five starter skills
+  - [x] 13.3 Implement the five starter skills
     - Create `engine/skills/vampire.ts` (`onHit`: heal `healFraction` × damage dealt, clamped to `maxHp`), `spike.ts` (`onHurt`: on `contact` damage reflect `reflectAmount` to attacker via `applyDamage` with `isReflected`), `blaster.ts` (`onTick`: every `fireInterval` steps spawn one projectile credited to the ball), `splitter.ts` (`onDeath`: spawn `splitCount` balls at `radiusFactor` radius), `grower.ts` (`onWallBounce`: increase radius by `radiusGain` and speed by `speedGain`). Register all five.
     - _Requirements: 9.6, 9.7, 9.8, 9.9, 9.10_
   - [ ]* 13.4 Write property test for Vampire
@@ -192,14 +192,14 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - Five starter skills register under unique ids; registry rejects empty/duplicate ids; unknown-skill-id rejection message (9.1, 9.5).
     - _Requirements: 9.1, 9.5_
 
-- [ ] 14. Phase 5 — Weapon system and starter weapons
-  - [ ] 14.1 Implement weapon types and registry with validation
+- [x] 14. Phase 5 — Weapon system and starter weapons
+  - [x] 14.1 Implement weapon types and registry with validation
     - Create `engine/weapons/types.ts` (`WeaponMode` only `held`/`orbit`, `Hitbox`, `ProjectileSettings`, `WeaponDefinition` with required fields and bounds plus optional `projectile` and `cannotBeParried`) and `engine/weapons/registry.ts` (`WeaponRegistry.register` validating every required field and bound, rejecting and excluding invalid definitions with an error naming the offending field; `weaponRegistry` singleton).
     - _Requirements: 10.1, 10.2, 10.3_
   - [ ]* 14.2 Write property test for weapon-definition validation
     - **Property 22: Invalid weapon definitions are rejected at registration**
     - **Validates: Requirements 10.2**
-  - [ ] 14.3 Implement weapon motion, hits, clashes, and projectiles in the step
+  - [x] 14.3 Implement weapon motion, hits, clashes, and projectiles in the step
     - Wire the engine step: orbit weapons advance angle by `angularSpeed` × TIMESTEP and position to owner + unit(angle) × orbit radius; held weapons position to owner and orient toward target; weapon hitbox vs opposing ball with no active `hitCooldown` → `applyDamage` source `weapon` once then start pair cooldown; two overlapping weapon hitboxes → `Weapon_Clash` resolved to one of `bounce`/`parry`/`disarm` by weight with no direct damage and exactly one `weaponClash` event, where a `cannotBeParried` weapon never yields `parry`; weapons with projectile settings spawn a projectile on fire that applies `projectile` damage credited to the owner on overlap.
     - _Requirements: 10.4, 10.5, 10.6, 10.7, 10.8, 10.9, 10.10, 10.12_
   - [ ]* 14.4 Write property test for weapon motion
@@ -214,14 +214,14 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
   - [ ]* 14.7 Write property test for projectile damage
     - **Property 26: Projectiles damage opposing balls credited to the owner**
     - **Validates: Requirements 10.10**
-  - [ ] 14.8 Implement the five starter weapons
+  - [x] 14.8 Implement the five starter weapons
     - Create `engine/weapons/sword.ts` (held baseline), `hammer.ts` (held, heaviest weight, `cannotBeParried: true`), `spear.ts` (held, greatest length), `orbiting-blade.ts` (orbit), `bow.ts` (held with `projectile` settings). Register all five.
     - _Requirements: 10.11_
   - [ ]* 14.9 Write unit tests for starter weapons
     - Five weapons register; Hammer heaviest and unparryable, Spear longest, Bow has projectile settings; mode is only `held`/`orbit` (10.1, 10.3, 10.11).
     - _Requirements: 10.1, 10.3, 10.11_
 
-- [ ] 15. Checkpoint — Phases 4–5 skills and weapons complete
+- [x] 15. Checkpoint — Phases 4–5 skills and weapons complete
   - Ensure all tests pass, ask the user if questions arise.
 
 - [ ] 16. Phase 6 — Versus page, renderer, and lifecycle
