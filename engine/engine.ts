@@ -17,7 +17,7 @@ import {
   weaponTouchesCircle,
 } from './weapons/combat'
 
-export const engineVersion = '1.0.0' // non-empty string (Req 5.8)
+export const engineVersion = '1.1.0' // non-empty string (Req 5.8)
 export const TIMESTEP = 1 / 60 // seconds (Req 5.4)
 
 /** Knockback impulse magnitude applied on a weapon hit. */
@@ -65,7 +65,7 @@ export function createEngine(opts: EngineOptions): Engine {
   })
 
   // Build ball entities from config, resolving weapon ids.
-  for (const bc of opts.config.ballConfigs) {
+  for (const [slot, bc] of opts.config.ballConfigs.entries()) {
     const weapons: WeaponInstance[] = bc.weapons.map((ref) => {
       const def = weaponRegistry.get(ref.weaponId)
       if (!def) {
@@ -101,7 +101,10 @@ export function createEngine(opts: EngineOptions): Engine {
         ownerId: ball.id,
         def: inst.def,
         angle: 0,
-        angularSpeed: inst.def.angularSpeed, // runtime; flips on clash
+        // Runtime; flips on clash. Odd slots spin the other way: with equal
+        // speeds (a mirror match) same-direction blades stay parallel forever
+        // and never clash.
+        angularSpeed: slot % 2 === 0 ? inst.def.angularSpeed : -inst.def.angularSpeed,
         stunSteps: 0,
         riposteSteps: 0,
         hitbox: inst.def.hitbox,
