@@ -4,7 +4,6 @@ import type { World } from './world'
 
 export type DamageSourceTag =
   // active in phases 3-5
-  | 'contact'
   | 'weapon'
   | 'projectile'
   // reserved, unimplemented (Req 6.5)
@@ -17,7 +16,6 @@ export type DamageSourceTag =
 
 /** All Damage_Source tags, active and reserved (Req 6.4, 6.5). */
 export const DAMAGE_SOURCE_TAGS: readonly DamageSourceTag[] = [
-  'contact',
   'weapon',
   'projectile',
   'area',

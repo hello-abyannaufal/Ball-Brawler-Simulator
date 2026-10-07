@@ -10,7 +10,9 @@ export class WeaponRegistry {
 
   register(def: WeaponDefinition): void {
     this.validate(def)
-    if (this.defs.has(def.id)) {
+    // Under dev HMR an edited definition module re-runs and re-registers its
+    // id: replace it instead of throwing. Outside HMR duplicates still fail.
+    if (this.defs.has(def.id) && !import.meta.hot) {
       throw new Error(`Duplicate weapon id: ${def.id}.`)
     }
     this.defs.set(def.id, def)

@@ -25,12 +25,12 @@ The non-negotiable architecture rules from the product brief govern every phase:
 - **RNG**: The seeded pseudo-random number generator (mulberry32) used by the Engine. The sole source of randomness inside the Engine.
 - **World**: The Engine container holding all generic Entities (balls, projectiles, weapons, and later mines, minions, areas) with a stable iteration order.
 - **Entity**: A generic simulated object in the World (a ball, projectile, or weapon).
-- **Ball**: An Entity that fights in the arena; has position, velocity, radius, HP, `contactDamage`, a list of skills, zero or more weapons, and a list of active status effects.
+- **Ball**: An Entity that fights in the arena; has position, velocity, radius, HP, zero or more weapons, and a list of active status effects.
 - **Arena**: The bounded simulation space (walls) with configurable dimensions in which balls move and collide.
 - **Timestep**: The fixed simulation increment of 1/60 second used by the Engine for every step.
 - **Step**: One fixed-timestep advancement of the World that executes the fixed step order.
 - **applyDamage**: The single Engine function through which all HP reductions occur, taking `{ source, attackerId, targetId, amount, flags }`.
-- **Damage_Source**: A tagged member of the extensible damage-source union. Phases 3-5 implement `contact`, `weapon`, and `projectile`; the union reserves room for `area`, `dot`, `environment`, `beam`, `summon`, and `reflect`.
+- **Damage_Source**: A tagged member of the extensible damage-source union. Phases 3-5 implement `weapon` and `projectile`; the union reserves room for `area`, `dot`, `environment`, `beam`, `summon`, and `reflect`.
 - **Status_Effect**: A time-bound modifier attached to a Ball, with a duration and a tick interval, processed every Step.
 - **Hit_Cooldown**: A per-attacker-target-pair timer that prevents a single damage interaction from applying damage on consecutive Steps.
 - **Skill**: A data-driven definition in `engine/skills/` with lifecycle hooks (`onTick`, `onHit`, `onHurt`, `onWallBounce`, `onDeath`) that can read the triggering Damage_Source.
@@ -39,7 +39,7 @@ The non-negotiable architecture rules from the product brief govern every phase:
 - **Weapon_Registry**: The central registry mapping weapon ids to Weapon definitions.
 - **Weapon_Clash**: An interaction between two Weapon hitboxes resolved by weapon weight (bounce, parry, or disarm), producing no direct damage.
 - **Knockback**: A small velocity impulse applied to a Ball on every hit.
-- **Engine_Event**: A structured event emitted by the Engine (`damage`, `skillTriggered`, `weaponClash`, `ballDied`, `matchEnded`) consumed by the UI.
+- **Engine_Event**: A structured event emitted by the Engine (`damage`, `weaponClash`, `ballDied`, `matchEnded`; `skillTriggered` is deferred with Requirement 9) consumed by the UI.
 - **engineVersion**: A version identifier for the Engine, stored with every saved duel so results can be interpreted against the Engine that produced them.
 - **Duel_Config**: The storable description of a duel: `{ engineVersion, seed, ballConfigs, arenaConfig }`.
 - **Roulette**: The feature that draws skills and weapons for a ball from the registries using the seeded RNG, producing reproducible results from a seed.
@@ -145,7 +145,7 @@ The non-negotiable architecture rules from the product brief govern every phase:
 1. THE Engine SHALL reduce a Ball's HP only through the `applyDamage` function, which accepts `{ source, attackerId, targetId, amount, flags }`.
 2. WHEN `applyDamage` is invoked with an `amount` less than or equal to zero, THE Engine SHALL NOT change the target Ball's HP and SHALL return without emitting a `damage` Engine_Event.
 3. WHEN `applyDamage` is invoked with a `targetId` that matches no living Ball, THE Engine SHALL NOT change any Ball's HP and SHALL return an outcome indicating the target was not found.
-4. THE Engine SHALL define Damage_Source as a tagged union whose members in Phases 3-5 are exactly `contact`, `weapon`, and `projectile`.
+4. THE Engine SHALL define Damage_Source as a tagged union whose members in Phases 3-5 are exactly `weapon` and `projectile`.
 5. THE Engine SHALL define the Damage_Source union with the reserved, unimplemented members `area`, `dot`, `environment`, `beam`, `summon`, and `reflect`, such that adding any reserved member requires no change to the `applyDamage` signature.
 6. WHEN `applyDamage` is invoked with a `source` tag not listed among the active or reserved Damage_Source members, THE Engine SHALL NOT change any Ball's HP and SHALL return an outcome indicating the source is invalid.
 7. WHERE a damage interaction has no attacker, THE `applyDamage` function SHALL accept an empty `attackerId` and SHALL still reduce the target Ball's HP by `amount`.
@@ -178,15 +178,17 @@ The non-negotiable architecture rules from the product brief govern every phase:
 
 1. WHEN the Engine advances a Step, THE Engine SHALL update each alive Ball's position by adding the product of its velocity and the fixed Timestep duration to its current position.
 2. WHEN a Ball's distance from an Arena wall along that wall's normal axis becomes less than or equal to the Ball's radius, THE Engine SHALL negate the Ball's velocity component normal to that wall and SHALL reposition the Ball so its edge is tangent to the wall, keeping the entire Ball within the Arena bounds.
-3. WHEN a Ball bounces off an Arena wall, THE Engine SHALL emit the condition that triggers the `onWallBounce` skill hook exactly once per bounce event.
+3. WHEN a Ball bounces off an Arena wall, THE Engine SHALL emit the condition that triggers the `onWallBounce` skill hook exactly once per bounce event. (Deferred with Requirement 9: no skill hooks exist currently.)
 4. WHEN the distance between the centers of two alive Balls becomes less than or equal to the sum of their radii, THE Engine SHALL detect a collision and SHALL reposition both Balls along the line between their centers until the center distance equals the sum of their radii.
-5. IF two Balls collide and a colliding Ball has a `contactDamage` greater than 0 and no active Hit_Cooldown exists for that ordered pair, THEN THE Engine SHALL apply that `contactDamage` through `applyDamage` with Damage_Source `contact` and SHALL start the Hit_Cooldown for that pair.
-6. WHEN a hit occurs, THE Engine SHALL apply a Knockback impulse to the struck Ball directed along the line from the striking Ball's center to the struck Ball's center.
+5. WHEN two Balls collide, THE Engine SHALL bounce them apart along the line between their centers and SHALL NOT apply any damage; ball-vs-ball collision is purely physical.
+6. WHEN a weapon hit occurs, THE Engine SHALL apply a Knockback impulse to the struck Ball directed along the line from the attacking Ball's center to the struck Ball's center.
 7. WHILE two or more Balls remain alive, THE Engine SHALL continue running Steps and SHALL NOT emit a `matchEnded` Engine_Event.
 8. WHEN exactly one Ball remains alive, THE Engine SHALL declare that Ball the winner and SHALL emit a `matchEnded` Engine_Event exactly once.
 9. IF zero Balls remain alive after a Step, THEN THE Engine SHALL end the match with no winner and SHALL emit a `matchEnded` Engine_Event exactly once.
 
 ### Requirement 9: Skill System and Starter Skills (Phase 4)
+
+> **Status: removed for now (deferred).** The skill system (registry, hooks, `skillTriggered` event, `skills` on balls, and the five starter skills) was removed from the engine during the Phase 6 playtest to focus on weapon combat. The criteria below are kept for reference and must be re-implemented before they apply again.
 
 **User Story:** As a developer, I want a data-driven skill system with lifecycle hooks and five starter skills, so that balls have varied behavior and new skills can be added as single files.
 
@@ -198,7 +200,7 @@ The non-negotiable architecture rules from the product brief govern every phase:
 4. WHEN a Skill triggers, THE Engine SHALL emit exactly one `skillTriggered` Engine_Event identifying the triggered Skill.
 5. IF a Skill id referenced by a Ball configuration is not present in the Skill_Registry, THEN THE Engine SHALL reject that Ball configuration and surface an error identifying the unknown skill id.
 6. WHERE a Ball has the Vampire skill, WHEN that Ball deals damage through `applyDamage`, THE Engine SHALL heal that Ball by a configuration-defined fraction of the damage dealt, clamped so the Ball's HP does not exceed its maximum HP.
-7. WHERE a Ball has the Spike skill, WHEN that Ball takes `contact` damage from an attacker, THE Engine SHALL apply a configuration-defined reflected damage amount to the attacker through `applyDamage` with the `isReflected` flag set.
+7. WHERE a Ball has the Spike skill, WHEN that Ball takes `weapon` or `projectile` damage from an attacker, THE Engine SHALL apply a configuration-defined reflected damage amount to the attacker through `applyDamage` with the `isReflected` flag set.
 8. WHERE a Ball has the Blaster skill, WHEN the configuration-defined firing interval elapses during `onTick`, THE Engine SHALL spawn one projectile Entity credited to that Ball.
 9. WHERE a Ball has the Splitter skill, WHEN that Ball dies, THE Engine SHALL spawn the configuration-defined number of smaller Balls on `onDeath`, each with a configuration-defined reduced radius.
 10. WHERE a Ball has the Grower skill, WHEN that Ball bounces off an Arena wall, THE Engine SHALL increase that Ball's radius and speed by the configuration-defined amounts on `onWallBounce`.
@@ -242,6 +244,8 @@ The non-negotiable architecture rules from the product brief govern every phase:
 
 ### Requirement 12: Roulette (Phase 7)
 
+> **Note:** while Requirement 9 is deferred, the skill parts of this requirement are deferred too (no Skill_Registry exists).
+
 **User Story:** As a user, I want to spin a seeded roulette to draw skills and weapons for a ball, so that I get reproducible randomized loadouts.
 
 #### Acceptance Criteria
@@ -256,6 +260,8 @@ The non-negotiable architecture rules from the product brief govern every phase:
 8. IF saving a Roulette result to the Library_Store fails, THEN THE Scaffold_App SHALL retain the unsaved result and present an error indication reporting the save failure.
 
 ### Requirement 13: Library and Local Persistence (Phase 7)
+
+> **Note:** while Requirement 9 is deferred, the skill parts of this requirement are deferred too (no Skill_Registry exists).
 
 **User Story:** As a user, I want saved balls, skills, and weapons kept locally with JSON export and import, so that my content persists across sessions and is portable.
 
@@ -316,7 +322,7 @@ The non-negotiable architecture rules from the product brief govern every phase:
 3. THE Scaffold_App SHALL make every menu control reachable and activatable using only the keyboard, where Tab and Shift+Tab move focus between controls and Enter or Space activates the focused control.
 4. WHILE any menu control holds keyboard focus, THE Scaffold_App SHALL display a focus indicator on that control that is visually distinct from every unfocused control and SHALL display the focus indicator on exactly one control at a time.
 5. WHILE a duel displays, THE Versus_Page SHALL present a hit-flash lasting between 50 ms and 500 ms on each registered hit.
-6. WHEN a hit is registered during a duel, THE Versus_Page SHALL present visual feedback whose appearance differs for each of the contact, weapon, and projectile Damage_Source values such that the originating Damage_Source is distinguishable from the other two by sight alone.
+6. WHEN a hit is registered during a duel, THE Versus_Page SHALL present visual feedback whose appearance differs for each of the weapon and projectile Damage_Source values such that the originating Damage_Source is distinguishable from the other by sight alone.
 
 ### Requirement 17: Documentation and Deployment Safety (Phase 9)
 

@@ -9,7 +9,6 @@ export type EngineEvent =
       targetId: EntityId
       amount: number
     }
-  | { type: 'skillTriggered'; skillId: string; ballId: EntityId }
   | {
       type: 'weaponClash'
       a: EntityId

@@ -1,4 +1,3 @@
-import type { SkillInstance } from './skills/types'
 import type { WeaponInstance, WeaponDefinition, Hitbox  } from './weapons/types'
 import type { StatusEffect } from './status'
 
@@ -24,9 +23,7 @@ export interface Ball extends BaseEntity {
   radius: number
   hp: number
   maxHp: number
-  contactDamage: number // may be 0
   cruiseSpeed: number // speed the ball eases back to after knockback
-  skills: SkillInstance[]
   weapons: WeaponInstance[]
   statusEffects: StatusEffect[]
 }

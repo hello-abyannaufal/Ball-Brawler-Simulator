@@ -3,8 +3,7 @@ import { ref, computed, onBeforeUnmount } from 'vue'
 import type { BallConfig, DuelConfig } from '~/engine/config'
 import { engineVersion } from '~/engine/engine'
 import { useVersusDuel, type VersusDuel } from '~/composables/useVersusDuel'
-import { hpBarFraction } from '~/utils/duel'
-import { defaultBalls } from '~/utils/duel'
+import { defaultBalls, hpBarFraction } from '~/utils/duel'
 
 // Arena configured into a Duel_Config before running (Req 11.4).
 const arena = { width: 360, height: 360 } // 1:1

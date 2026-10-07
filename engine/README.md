@@ -8,7 +8,7 @@ Conventions:
 
 - Deterministic: seeded RNG (mulberry32) and a fixed timestep. No `Math.random()`
   or wall-clock time inside the engine.
-- Data-driven: one file per skill in `engine/skills/`, one definition per weapon
-  in `engine/weapons/`, with central registries.
+- Data-driven: one definition per weapon in `engine/weapons/`, with a central
+  registry. (The skill system in `engine/skills/` is deferred.)
 
 (Phase 1 scaffold — directories are intentionally empty placeholders.)

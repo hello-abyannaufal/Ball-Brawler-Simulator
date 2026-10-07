@@ -1,7 +1,6 @@
 import type { Ball, EntityId, WeaponEntity } from './entities'
 import type { DuelConfig } from './config'
 import type { EngineEvent } from './events'
-import type { SkillContext, SkillInstance } from './skills/types'
 import type { WeaponInstance } from './weapons/types'
 import { World } from './world'
 import { createRng } from './rng'
@@ -9,7 +8,6 @@ import { applyDamage } from './damage'
 import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback } from './physics'
 import { runStatusEffects } from './status'
 import { CooldownTable } from './cooldown'
-import { skillRegistry } from './skills/registry'
 import { weaponRegistry } from './weapons/registry'
 import {
   weaponHitsBall,
@@ -20,10 +18,8 @@ import {
 export const engineVersion = '1.0.0' // non-empty string (Req 5.8)
 export const TIMESTEP = 1 / 60 // seconds (Req 5.4)
 
-/** Default contact hit cooldown, in whole steps. */
-const CONTACT_COOLDOWN_STEPS = 30
-/** Knockback impulse magnitude applied on a contact hit. */
-const CONTACT_KNOCKBACK = 50
+/** Knockback impulse magnitude applied on a weapon hit. */
+const HIT_KNOCKBACK = 50
 /** Debounce between repeated clashes of the same weapon pair, in steps. */
 const CLASH_COOLDOWN_STEPS = 10
 /** Base knockback magnitude applied to both balls on a weapon clash. */
@@ -52,8 +48,8 @@ export interface Engine {
 }
 
 /**
- * Builds a World from config, validates the seed, and resolves every skill and
- * weapon id against the registries (rejecting unknown ids by name, Req 9.5).
+ * Builds a World from config, validates the seed, and resolves every weapon id
+ * against the registry (rejecting unknown ids by name).
  */
 export function createEngine(opts: EngineOptions): Engine {
   const rng = createRng(opts.seed) // validates seed, throws before any step (Req 5.2, 5.9)
@@ -63,20 +59,8 @@ export function createEngine(opts: EngineOptions): Engine {
     onEvent: opts.onEvent,
   })
 
-  // Build ball entities from config, resolving skill/weapon ids.
+  // Build ball entities from config, resolving weapon ids.
   for (const bc of opts.config.ballConfigs) {
-    const skills: SkillInstance[] = bc.skills.map((ref) => {
-      const def = skillRegistry.get(ref.skillId)
-      if (!def) {
-        throw new Error(`Unknown skill id: ${ref.skillId}.`) // Req 9.5
-      }
-      return {
-        def,
-        config: { ...def.config, ...(ref.config ?? {}) },
-        state: {},
-      }
-    })
-
     const weapons: WeaponInstance[] = bc.weapons.map((ref) => {
       const def = weaponRegistry.get(ref.weaponId)
       if (!def) {
@@ -94,9 +78,7 @@ export function createEngine(opts: EngineOptions): Engine {
       radius: bc.radius,
       hp: bc.maxHp,
       maxHp: bc.maxHp,
-      contactDamage: bc.contactDamage,
       cruiseSpeed: Math.hypot(bc.initialVelocity.x, bc.initialVelocity.y),
-      skills,
       weapons,
       statusEffects: [],
     }
@@ -130,28 +112,6 @@ export function createEngine(opts: EngineOptions): Engine {
   const clashedThisStep = new Set<EntityId>()
   let ended = false
   let winner: EntityId | null | undefined = undefined
-
-  function fireSkillHook(
-    ball: Ball,
-    hook: 'onTick' | 'onHit' | 'onHurt' | 'onWallBounce' | 'onDeath',
-    extra?: Omit<Partial<SkillContext>, 'ball' | 'world' | 'config' | 'state'>,
-  ): void {
-    // Snapshot the skill list: hooks may mutate ball.skills (none currently do).
-    for (const inst of [...ball.skills]) {
-      const fn = inst.def[hook]
-      if (!fn) continue
-      const ctx: SkillContext = {
-        ball,
-        world,
-        config: inst.config,
-        state: inst.state,
-        ...extra,
-      }
-      fn.call(inst.def, ctx)
-      // Each triggered skill emits exactly one skillTriggered event (Req 9.4).
-      world.emit({ type: 'skillTriggered', skillId: inst.def.id, ballId: ball.id })
-    }
-  }
 
   function liveWeapons(): WeaponEntity[] {
     return world.entities.filter(
@@ -319,8 +279,7 @@ export function createEngine(opts: EngineOptions): Engine {
       for (const ball of world.aliveBalls()) {
         if (ball.id === w.ownerId) continue
         if (!weaponHitsBall(w, ball)) continue
-        // Keyed by the weapon (not the owner) so it doesn't share the
-        // contact-damage cooldown; uses the weapon's own hitCooldown.
+        // Keyed by the weapon so each weapon has its own hitCooldown.
         if (cooldowns.isActive(w.id, ball.id)) continue
 
         const outcome = applyDamage(world, {
@@ -331,16 +290,7 @@ export function createEngine(opts: EngineOptions): Engine {
         })
         if (outcome.kind === 'applied') {
           cooldowns.start(w.id, ball.id, Math.round(w.def.hitCooldown / 1000 / TIMESTEP))
-          applyKnockback(owner, ball, CONTACT_KNOCKBACK)
-          fireSkillHook(owner, 'onHit', {
-            source: { tag: 'weapon' },
-            dealt: { targetId: ball.id, amount: outcome.applied },
-          })
-          fireSkillHook(ball, 'onHurt', {
-            source: { tag: 'weapon' },
-            taken: { attackerId: w.ownerId, amount: outcome.applied },
-          })
-          if (outcome.killed) fireSkillHook(ball, 'onDeath')
+          applyKnockback(owner, ball, HIT_KNOCKBACK)
         }
       }
     }
@@ -374,56 +324,36 @@ export function createEngine(opts: EngineOptions): Engine {
         const sum = p.radius + ball.radius
         if (dx * dx + dy * dy > sum * sum) continue
 
-        const outcome = applyDamage(world, {
+        applyDamage(world, {
           source: { tag: 'projectile' },
           attackerId: p.ownerId, // credited to the owner (Req 10.10)
           targetId: ball.id,
           amount: p.damage,
         })
         p.alive = false // projectile is consumed on hit
-        if (outcome.kind === 'applied') {
-          const owner = world.ballById(p.ownerId)
-          if (owner) {
-            fireSkillHook(owner, 'onHit', {
-              source: { tag: 'projectile' },
-              dealt: { targetId: ball.id, amount: outcome.applied },
-            })
-          }
-          fireSkillHook(ball, 'onHurt', {
-            source: { tag: 'projectile' },
-            taken: { attackerId: p.ownerId, amount: outcome.applied },
-          })
-          if (outcome.killed) fireSkillHook(ball, 'onDeath')
-        }
         break // consumed
       }
     }
   }
 
+  /**
+   * Keeps simulating after `matchEnded` (the winner keeps moving); the event
+   * itself is still emitted exactly once.
+   */
   function step(): void {
-    if (ended) return
-
-    // Per-step skill tick (e.g. Blaster firing timer, Req 9.8).
-    for (const ball of world.aliveBalls()) {
-      fireSkillHook(ball, 'onTick')
-    }
-
     // (1) move balls and weapons
     for (const ball of world.aliveBalls()) {
       regulateSpeed(ball)
       ball.position.x += ball.velocity.x * TIMESTEP
       ball.position.y += ball.velocity.y * TIMESTEP
-      const bounced = resolveWallCollision(ball, world.arena)
-      if (bounced) {
-        fireSkillHook(ball, 'onWallBounce') // once per bounce (Req 8.3)
-      }
+      resolveWallCollision(ball, world.arena)
     }
     moveWeapons()
     moveProjectiles()
 
     // (2) detect collisions — stable `for i < j` over the entity array.
+    // Ball vs ball is purely physical: they bounce apart, no damage.
     const balls = world.aliveBalls()
-    const contacts: Array<[Ball, Ball]> = []
     for (let i = 0; i < balls.length; i++) {
       for (let j = i + 1; j < balls.length; j++) {
         const a = balls[i]!
@@ -431,7 +361,6 @@ export function createEngine(opts: EngineOptions): Engine {
         if (ballsOverlap(a, b)) {
           separateBalls(a, b)
           bounceBalls(a, b) // reflect velocities so they don't stick
-          contacts.push([a, b])
         }
       }
     }
@@ -439,12 +368,8 @@ export function createEngine(opts: EngineOptions): Engine {
     // (3) resolve weapon clashes
     resolveWeaponClashes()
 
-    // (4) apply damage — contact (both directions), weapon hits, projectiles.
-    // (5) apply knockback — bundled with each applied contact hit.
-    for (const [a, b] of contacts) {
-      applyContact(a, b)
-      applyContact(b, a)
-    }
+    // (4) apply damage — weapon hits, projectiles.
+    // (5) apply knockback — bundled with each applied weapon hit.
     applyWeaponHits()
     applyProjectileHits()
 
@@ -452,9 +377,15 @@ export function createEngine(opts: EngineOptions): Engine {
     runStatusEffects(world)
     cooldowns.decrementAll() // one timestep per step (Req 7.8)
 
+    // A ball killed this step drops its weapons right away, so they don't
+    // linger (or keep clashing) for a step after the owner is gone.
+    for (const w of liveWeapons()) {
+      if (!world.ballById(w.ownerId)?.alive) w.alive = false
+    }
+
     // (7) check win condition
     const alive = world.aliveBalls()
-    if (alive.length <= 1) {
+    if (!ended && alive.length <= 1) {
       // Only end once zero or one remains (Req 8.7, 8.8, 8.9).
       winner = alive.length === 1 ? alive[0]!.id : null
       ended = true
@@ -475,38 +406,6 @@ export function createEngine(opts: EngineOptions): Engine {
     const target = speed + (ball.cruiseSpeed - speed) * SPEED_RECOVERY
     ball.velocity.x *= target / speed
     ball.velocity.y *= target / speed
-  }
-
-  /** Striker deals contact damage to struck if eligible, then knockback. */
-  function applyContact(striker: Ball, struck: Ball): void {
-    if (striker.contactDamage <= 0) return
-    if (!struck.alive) return
-    // Active cooldown for this ordered pair blocks all interaction (Req 7.7).
-    if (cooldowns.isActive(striker.id, struck.id)) return
-
-    const outcome = applyDamage(world, {
-      source: { tag: 'contact' },
-      attackerId: striker.id,
-      targetId: struck.id,
-      amount: striker.contactDamage,
-    })
-
-    if (outcome.kind === 'applied') {
-      cooldowns.start(striker.id, struck.id, CONTACT_COOLDOWN_STEPS)
-      applyKnockback(striker, struck, CONTACT_KNOCKBACK) // along center line (Req 8.6)
-      // Damage-driven skill hooks (Req 9.3): striker dealt, struck took.
-      fireSkillHook(striker, 'onHit', {
-        source: { tag: 'contact' },
-        dealt: { targetId: struck.id, amount: outcome.applied },
-      })
-      fireSkillHook(struck, 'onHurt', {
-        source: { tag: 'contact' },
-        taken: { attackerId: striker.id, amount: outcome.applied },
-      })
-      if (outcome.killed) {
-        fireSkillHook(struck, 'onDeath')
-      }
-    }
   }
 
   return {

@@ -7,7 +7,6 @@ const root = process.cwd()
 
 const REQUIRED_DIRS = [
   'engine',
-  'engine/skills',
   'engine/weapons',
   'server/utils',
   'pages',

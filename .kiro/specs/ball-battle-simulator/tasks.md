@@ -88,7 +88,7 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
 - [x] 8. Phase 3 — Damage gateway and Damage_Source union
   - [x] 8.1 Implement events and the Damage_Source union
     - Create `engine/events.ts` (`EngineEvent`: `damage`, `skillTriggered`, `weaponClash`, `ballDied`, `matchEnded`).
-    - Create `engine/damage.ts` types: `DamageSourceTag` with active members `contact`/`weapon`/`projectile` and reserved `area`/`dot`/`environment`/`beam`/`summon`/`reflect`; `DamageSource`, `DamageFlags`, `ApplyDamageInput`, `ApplyDamageOutcome`.
+    - Create `engine/damage.ts` types: `DamageSourceTag` with active members `weapon`/`projectile` and reserved `area`/`dot`/`environment`/`beam`/`summon`/`reflect`; `DamageSource`, `DamageFlags`, `ApplyDamageInput`, `ApplyDamageOutcome`.
     - _Requirements: 6.4, 6.5_
   - [x] 8.2 Implement the applyDamage gateway
     - Create `applyDamage(world, input)` as the only HP reducer: amount ≤ 0 → no change, no event, `noop`; target not a living ball → `target-not-found`; source tag outside the union → `invalid-source`; empty `attackerId` allowed; `summonOwnerId` credits owner; `isReflected` applies once and triggers no further reflection; positive application emits exactly one `damage` event; HP ≤ 0 clamps to 0, marks dead, emits exactly one `ballDied`.
@@ -139,7 +139,7 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
 
 - [x] 11. Phase 3 — Engine step loop, win condition, and engineVersion
   - [x] 11.1 Implement the engine lifecycle and fixed-order step
-    - Create `engine/engine.ts`: `engineVersion` (non-empty string), `TIMESTEP = 1/60`, `EngineOptions`, `Engine`, `createEngine(opts)` (builds World from config, validates seed, resolves skill/weapon ids). `step()` runs the seven operations exactly once each in order: (1) move balls+weapons, (2) detect collisions, (3) resolve weapon clashes, (4) apply damage, (5) apply knockback, (6) run status effects, (7) check win condition. Wire wall-bounce to fire `onWallBounce` once per bounce; contact collisions route through `applyDamage` with source `contact` and start the pair cooldown; emit `matchEnded` for one-alive winner, zero-alive null winner, never while ≥2 alive.
+    - Create `engine/engine.ts`: `engineVersion` (non-empty string), `TIMESTEP = 1/60`, `EngineOptions`, `Engine`, `createEngine(opts)` (builds World from config, validates seed, resolves skill/weapon ids). `step()` runs the seven operations exactly once each in order: (1) move balls+weapons, (2) detect collisions, (3) resolve weapon clashes, (4) apply damage, (5) apply knockback, (6) run status effects, (7) check win condition. Wire wall-bounce to fire `onWallBounce` once per bounce; ball-vs-ball collisions only bounce (no damage); emit `matchEnded` for one-alive winner, zero-alive null winner, never while ≥2 alive.
     - _Requirements: 5.4, 5.5, 5.7, 5.8, 8.3, 8.5, 8.7, 8.8, 8.9_
   - [ ]* 11.2 Write property test for fixed step order
     - **Property 2: Fixed step order**
@@ -147,8 +147,8 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
   - [ ]* 11.3 Write property test for determinism
     - **Property 1: Determinism of seed and config**
     - **Validates: Requirements 5.5, 5.6, 11.10**
-  - [ ]* 11.4 Write property test for contact collision damage and knockback
-    - **Property 14: Contact collision applies damage once and knockback along the center line**
+  - [ ]* 11.4 Write property test for damage-free ball collisions and weapon-hit knockback
+    - **Property 14: Ball collisions deal no damage; weapon hits knock back along the center line**
     - **Validates: Requirements 8.5, 8.6**
   - [ ]* 11.5 Write property test for wall-bounce hook firing
     - **Property 12: Wall bounce triggers the hook exactly once**
@@ -164,6 +164,7 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
   - Ensure all tests pass, ask the user if questions arise.
 
 - [x] 13. Phase 4 — Skill system and starter skills
+  - **Removed for now (deferred, see 16.8).** Implemented earlier, then removed during the Phase 6 playtest. Sub-tasks below are kept for when skills come back.
   - [x] 13.1 Implement skill types and registry
     - Create `engine/skills/types.ts` (`SkillContext` with readable `source` on damage-driven hooks, `SkillDefinition` with only hooks `onTick`/`onHit`/`onHurt`/`onWallBounce`/`onDeath`, `SkillInstance`) and `engine/skills/registry.ts` (`SkillRegistry` rejecting duplicate/empty ids; `skillRegistry` singleton). Wire the engine to resolve ball-config skill ids against the registry, rejecting unknown ids with an error naming the id, and to emit exactly one `skillTriggered` event per triggered skill.
     - _Requirements: 9.1, 9.2, 9.3, 9.4, 9.5_
@@ -171,13 +172,13 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - **Property 16: Each skill trigger emits exactly one skillTriggered event**
     - **Validates: Requirements 9.4**
   - [x] 13.3 Implement the five starter skills
-    - Create `engine/skills/vampire.ts` (`onHit`: heal `healFraction` × damage dealt, clamped to `maxHp`), `spike.ts` (`onHurt`: on `contact` damage reflect `reflectAmount` to attacker via `applyDamage` with `isReflected`), `blaster.ts` (`onTick`: every `fireInterval` steps spawn one projectile credited to the ball), `splitter.ts` (`onDeath`: spawn `splitCount` balls at `radiusFactor` radius), `grower.ts` (`onWallBounce`: increase radius by `radiusGain` and speed by `speedGain`). Register all five.
+    - Create `engine/skills/vampire.ts` (`onHit`: heal `healFraction` × damage dealt, clamped to `maxHp`), `spike.ts` (`onHurt`: on `weapon`/`projectile` damage reflect `reflectAmount` to attacker via `applyDamage` with `isReflected`), `blaster.ts` (`onTick`: every `fireInterval` steps spawn one projectile credited to the ball), `splitter.ts` (`onDeath`: spawn `splitCount` balls at `radiusFactor` radius), `grower.ts` (`onWallBounce`: increase radius by `radiusGain` and speed by `speedGain`). Register all five.
     - _Requirements: 9.6, 9.7, 9.8, 9.9, 9.10_
   - [ ]* 13.4 Write property test for Vampire
     - **Property 17: Vampire heals a clamped fraction of damage dealt**
     - **Validates: Requirements 9.6**
   - [ ]* 13.5 Write property test for Spike
-    - **Property 18: Spike reflects contact damage to the attacker**
+    - **Property 18: Spike reflects weapon/projectile damage to the attacker**
     - **Validates: Requirements 9.7**
   - [ ]* 13.6 Write property test for Blaster
     - **Property 19: Blaster fires on interval**
@@ -227,7 +228,7 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
 - [x] 16. Phase 6 — Retro sprite system, Versus page, renderer, and lifecycle
   - [x] 16.0 Implement the retro sprite/asset system (hybrid: procedural + optional PNG)
     - Create `assets/sprites/manifest.ts`: a typed registry mapping every `spriteId` to its source. Each entry is either `{ kind: 'procedural'; draw(ctx, size) }` (pixel grid drawn in code) or `{ kind: 'image'; src: string }` (PNG under `public/sprites/`). Procedural is the default so the game runs with zero external files; an entry can later be swapped to an image with no logic change.
-    - Create `composables/useSprites.ts` (client-only): preloads/caches sprite canvases at the base pixel grid (entities 32×32, spear 48×12, projectile 8×8, icons 16×16), renders them with `imageSmoothingEnabled = false` at integer scale, and exposes `drawSprite(ctx, spriteId, x, y, scale, angle?)`. Missing/failed images fall back to a visible placeholder sprite, never a crash.
+    - Create `composables/useSprites.ts` (client-only): preloads/caches sprite canvases at the base pixel grid (entities 32×32, spear 48×12, projectile 8×8, icons 16×16), renders them with `imageSmoothingEnabled = false` (integer scale for UI/icons; weapon sprites use the length-derived scale from 16.7), and exposes `drawSprite(ctx, spriteId, x, y, scale, angle?)`. Missing/failed images fall back to a visible placeholder sprite, never a crash.
     - Add a global retro look: register one bitmap pixel font (8px tall) and a 9-slice panel/button helper (tile 8×8) usable across pages.
     - Keep this layer entirely in the app/client; the engine stays sprite-agnostic.
     - _Requirements: 11.5, 11.6_
@@ -242,7 +243,7 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - **Validates: Requirements 11.7**
   - [x] 16.3 Implement the client-only duel composable and retro renderer
     - Create `composables/useVersusDuel.ts` (client-only): owns the rAF loop advancing the engine by whole steps scaled by simulation speed, draws the World to a 2D canvas context once per frame, updates `hp`/`winner`/`lastEvent` `shallowRef`s at most once per frame, never deep-binds entity state into Vue. `rematch()` re-runs the same seed+config; `dispose()` cancels rAF and drops listeners.
-    - Render in retro pixel style via `useSprites` with `imageSmoothingEnabled = false` and integer scaling: draw a tiled arena floor + wall border, balls via the `appearance` circle-clip fill, weapons via their `spriteId` sprite rotated by the `WeaponEntity` angle around `WeaponDefinition.pivot` (default left-middle). Held weapons are anchored at the ball's surface (`owner.position + facing × owner.radius`), NOT at `WeaponEntity.position`, which the engine keeps at the hitbox center for collision; orbit weapons are anchored at `WeaponEntity.position`, projectiles as the 8×8 projectile sprite, and HP bars with a 9-slice frame + fill. Draw the pixel font for labels.
+    - Render in retro pixel style via `useSprites` with `imageSmoothingEnabled = false` (weapon sprites scaled by `length / spriteReach`, see 16.7): draw a tiled arena floor + wall border, balls via the `appearance` circle-clip fill, weapons via their `spriteId` sprite rotated by the `WeaponEntity` angle around `WeaponDefinition.pivot` (default left-middle). Held weapons are anchored at the ball's surface (`owner.position + facing × owner.radius`), NOT at `WeaponEntity.position`, which the engine keeps at the hitbox center for collision; orbit weapons are anchored at `WeaponEntity.position`, projectiles as the 8×8 projectile sprite, and HP bars with a 9-slice frame + fill. Draw the pixel font for labels.
     - Add a `showHitboxes` debug overlay (off by default): draw each weapon's logical hitbox outline (`segment`/`circle` from `WeaponDefinition.hitbox`) over the sprite so sprite-vs-hitbox alignment can be verified. IMPORTANT: hitboxes remain geometric data in the engine and are the single source of collision truth; sprites are visual only and are tuned to cover their hitbox. The renderer never derives collision from sprite pixels.
     - _Requirements: 11.5, 11.6, 11.8, 11.10, 11.11_
   - [x] 16.4 Wire the versus page UI
@@ -255,10 +256,25 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - Design revision agreed during Phase 6 playtest. Keep both `WeaponMode` values in the type for extensibility, but make every starter weapon `orbit`.
     - Motion: all weapons orbit with a STATIC `angularSpeed` from the definition — remove the `held` orient-toward-target path from `moveWeapons`. (Future: a skill may modify a weapon's spin speed; not now.)
     - Projectile firing (bow and any weapon with `projectile`): spawn a projectile only when the weapon is currently facing an opponent — the orbit angle points toward the nearest living opponent within a ±15° threshold — AND the fire cooldown is ready. Range (near or far) does not matter. Firing stays deterministic (derived from positions/angles + fixed cooldown, no wall-clock).
-    - Clash gets a physical effect: on any weapon-vs-weapon overlap, apply knockback to BOTH owner balls along their center line (reuse `applyKnockback`), resolve the outcome by weight (`bounce`/`parry`/`disarm`, Hammer never `parry`), emit exactly one `weaponClash` event, and apply NO damage and NO change to weapon spin (angularSpeed stays static).
-    - Bow deals no contact/melee damage (its `damage` is 0, so it is skipped by `applyWeaponHits`) but still participates in clash/parry/knockback.
-    - Update the five weapon defs to `mode: 'orbit'`; update the renderer anchor accordingly (orbit weapons at `WeaponEntity.position`). Re-verify determinism (two identical runs byte-identical) and re-test in the browser.
+    - Clash gets a physical effect: on any weapon-vs-weapon overlap, apply knockback to BOTH owner balls along their center line (reuse `applyKnockback`), resolve the outcome by weight (`bounce`/`parry`/`disarm`, Hammer never `parry`), emit exactly one `weaponClash` event, and apply NO damage. (Superseded by 16.7: clash now also reverses spin, and `disarm` stuns the lighter weapon.)
+    - Bow deals no melee damage (its `damage` is 0, so it is skipped by `applyWeaponHits`) but still participates in clash/parry/knockback.
+    - Update the five weapon defs to `mode: 'orbit'`; update the renderer anchor accordingly (grip pivot at the owner's surface along the weapon angle; see 16.7). Re-verify determinism (two identical runs byte-identical) and re-test in the browser.
     - _Requirements: 10.4, 10.6, 10.7, 10.8, 10.9, 10.10, 10.12_
+  - [x] 16.7 Combat tuning and game feel (Phase 6 playtest, round 2)
+    - Hitboxes: replace the circle approximation with real geometry in `engine/weapons/combat.ts` (point–segment for weapon vs ball, segment–segment / segment–circle / circle–circle for clashes). A segment hitbox spans `[owner surface, surface + length]`; a circle hitbox (hammer head, orbiting blade) sits at the far end (`surface + length - radius`).
+    - Proportions: resize starter weapons for radius-32..40 balls and add the visual-only `spriteReach` (sprite px from pivot to tip). The renderer scales each weapon sprite by `length / spriteReach` so the drawn weapon equals its hitbox. Default balls use radius 32.
+    - Speed: add `Ball.cruiseSpeed` (the ball's initial speed). Each step the speed eases back toward it (`SPEED_RECOVERY`), so knockback is a fading burst instead of accumulating forever.
+    - Clash: fires once per new contact (rising edge + short debounce), not every frame of a sustained overlap. `bounce`/`parry` reverse both weapons' spin; `disarm` keeps the heavier weapon's spin and reverses + stuns the lighter one (`stunSteps`, no damage while stunned). Weapons in a clash deal no damage that step.
+    - Weapon hits use each weapon's own `hitCooldown` (keyed by weapon id) and apply knockback.
+    - Remove contact damage: ball-vs-ball collision only bounces (Req 8.5). `contactDamage` and the `contact` Damage_Source are removed.
+    - Renderer (`composables/useVersusDuel.ts`, render-only, determinism unaffected): interpolate positions/angles between steps for smooth motion on high-refresh displays; hit-stop (80 ms on damage, 50 ms on clash); pixel blood particles on damage (count scales with damage, sprayed away from the attacker); spark burst + "+" flash at the clash contact point (count by outcome).
+    - Match end: a ball killed in a step drops its weapons in that same step. `step()` keeps simulating after `matchEnded` (still emitted exactly once, Req 8.8/8.9) so the winner keeps moving; the renderer keeps stepping instead of freezing.
+    - Dev: skill/weapon registries replace instead of throwing on duplicate ids under Vite HMR only (`import.meta.hot`); duplicates still throw in tests/production.
+    - _Requirements: 8.5, 8.6, 9.7, 10.6, 10.8, 11.5, 11.6_
+  - [x] 16.8 Remove the skill system for now (deferred)
+    - Delete `engine/skills/` (registry, types, hooks, the five starter skills) and the skill icons in `assets/sprites/manifest.ts`. Remove `skills` from `BallConfig`/`Ball`, the `skillTriggered` event, and all hook calls from the engine step. Balls now fight with weapons only.
+    - Requirement 9 and the skill parts of Requirements 12–13 are marked deferred in requirements.md; task 13 is kept for reference. Restore from git history (commit 548a969) when skills come back.
+    - _Requirements: 9 (deferred)_
 
 - [ ] 17. Phase 7 — Roulette and library store
   - [ ] 17.1 Implement the seeded roulette draw
@@ -318,8 +334,8 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - **Property 31: Simulation speed scales step count, not the timestep**
     - **Validates: Requirements 15.7**
   - [ ] 20.5 Implement reduced-motion, keyboard a11y, and per-source pixel hit feedback
-    - Honor `prefers-reduced-motion: reduce` by zeroing decorative/transition UI animation (0 ms) while keeping the simulation's fixed-timestep rate and outcome unchanged. Ensure menu controls are fully keyboard operable (Tab/Shift+Tab, Enter/Space) with exactly one visible focus indicator at a time (reuse the Phase 1 menu). On each registered hit present a 50–500 ms hit-flash whose appearance differs per `contact`/`weapon`/`projectile` source so the source is distinguishable by sight.
-    - Render the hit-flash as a 32×32 pixel sprite with three visually distinct variants (one per `contact`/`weapon`/`projectile` source) drawn at the hit location via `useSprites`, consistent with the retro style. Distinction must hold by shape/pattern, not color alone, so it survives reduced-motion and color-blind viewing.
+    - Honor `prefers-reduced-motion: reduce` by zeroing decorative/transition UI animation (0 ms) while keeping the simulation's fixed-timestep rate and outcome unchanged. Ensure menu controls are fully keyboard operable (Tab/Shift+Tab, Enter/Space) with exactly one visible focus indicator at a time (reuse the Phase 1 menu). On each registered hit present a 50–500 ms hit-flash whose appearance differs per `weapon`/`projectile` source so the source is distinguishable by sight.
+    - Render the hit-flash as a 32×32 pixel sprite with two visually distinct variants (one per `weapon`/`projectile` source) drawn at the hit location via `useSprites`, consistent with the retro style. Distinction must hold by shape/pattern, not color alone, so it survives reduced-motion and color-blind viewing.
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
   - [ ] 20.6 Wire the settings page
     - Replace the `/settings` placeholder body with controls bound to the settings store for resolution, aspect ratio, sound, and simulation speed.

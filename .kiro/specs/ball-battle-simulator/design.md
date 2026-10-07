@@ -168,8 +168,6 @@ export interface Ball extends BaseEntity {
   radius: number;
   hp: number;
   maxHp: number;
-  contactDamage: number; // may be 0
-  skills: SkillInstance[];
   weapons: WeaponInstance[];
   statusEffects: StatusEffect[];
 }
@@ -236,7 +234,7 @@ export function createEngine(opts: EngineOptions): Engine; // builds World from 
 ```ts
 export type DamageSourceTag =
   // active in phases 3-5
-  | 'contact' | 'weapon' | 'projectile'
+  | 'weapon' | 'projectile'
   // reserved, unimplemented (Req 6.5)
   | 'area' | 'dot' | 'environment' | 'beam' | 'summon' | 'reflect';
 
@@ -325,13 +323,14 @@ While a pair's cooldown is active, a repeated hit for that pair applies no damag
 ```ts
 export type EngineEvent =
   | { type: 'damage'; source: DamageSource; attackerId: EntityId | ''; targetId: EntityId; amount: number }
-  | { type: 'skillTriggered'; skillId: string; ballId: EntityId }
   | { type: 'weaponClash'; a: EntityId; b: EntityId; outcome: 'bounce' | 'parry' | 'disarm' }
   | { type: 'ballDied'; ballId: EntityId }
   | { type: 'matchEnded'; winner: EntityId | null };
 ```
 
 ### Engine: skill system (`engine/skills/`)
+
+> **Status: removed for now (deferred).** The skill system (registry, hooks, `skillTriggered` event, `skills` on balls, and the five starter skills) was removed from the engine during the Phase 6 playtest to focus on weapon combat. The criteria below are kept for reference and must be re-implemented before they apply again.
 
 ```ts
 export interface SkillContext {
@@ -380,7 +379,7 @@ Resolving a ball config against the registry: an unknown skill id rejects the ba
 | File | id | Hook(s) | Behavior |
 |------|----|---------|----------|
 | `vampire.ts` | `vampire` | `onHit` | Heal by `healFraction` × damage dealt, clamped to `maxHp` (Req 9.6) |
-| `spike.ts` | `spike` | `onHurt` | On `contact` damage, reflect `reflectAmount` to attacker via `applyDamage` with `isReflected` (Req 9.7) |
+| `spike.ts` | `spike` | `onHurt` | On `weapon`/`projectile` damage, reflect `reflectAmount` to attacker via `applyDamage` with `isReflected` (Req 9.7) |
 | `blaster.ts` | `blaster` | `onTick` | Every `fireInterval` steps, spawn one projectile credited to the ball (Req 9.8) |
 | `splitter.ts` | `splitter` | `onDeath` | Spawn `splitCount` smaller balls at `radiusFactor` radius (Req 9.9) |
 | `grower.ts` | `grower` | `onWallBounce` | Increase radius by `radiusGain` and speed by `speedGain` (Req 9.10) |
@@ -624,7 +623,7 @@ The recorder captures the canvas at 60 fps via `canvas.captureStream(60)`, picks
 
 ### App layer: settings and accessibility
 
-Simulation speed scales steps-per-real-second without changing the per-step 1/60 s timestep (Requirement 15.7). `prefers-reduced-motion: reduce` zeroes decorative/transition UI animation only; the simulation keeps its fixed-timestep rate and outcome (Requirements 16.1, 16.2). Menu controls are fully keyboard operable with a single visible focus indicator at a time (Requirements 16.3, 16.4 — reusing the Phase 1 menu). Each registered hit shows a 50–500 ms hit-flash whose appearance differs per `contact | weapon | projectile` source so the source is distinguishable by sight (Requirements 16.5, 16.6).
+Simulation speed scales steps-per-real-second without changing the per-step 1/60 s timestep (Requirement 15.7). `prefers-reduced-motion: reduce` zeroes decorative/transition UI animation only; the simulation keeps its fixed-timestep rate and outcome (Requirements 16.1, 16.2). Menu controls are fully keyboard operable with a single visible focus indicator at a time (Requirements 16.3, 16.4 — reusing the Phase 1 menu). Each registered hit shows a 50–500 ms hit-flash whose appearance differs per `weapon | projectile` source so the source is distinguishable by sight (Requirements 16.5, 16.6).
 
 ## Data Models
 
@@ -654,10 +653,8 @@ export interface BallConfig {
   id: string;
   radius: number;
   maxHp: number;
-  contactDamage: number;        // may be 0
   initialPosition: Vec2;
   initialVelocity: Vec2;
-  skills: SkillRef[];           // resolved against SkillRegistry (Req 9.5)
   weapons: WeaponRef[];         // resolved against WeaponRegistry
 }
 
@@ -731,7 +728,7 @@ PBT applies squarely to the Engine (Phases 3–5) because it is a pure, determin
 
 ### Property 9: Hit cooldown prevents repeat interactions
 
-*For any* attacker-target pair with an active Hit_Cooldown, a repeated hit between that pair applies no damage, no knockback, and no status change and leaves both Balls' state unchanged; each Step decrements an active cooldown's remaining time by exactly one timestep; and once the cooldown reaches zero a subsequent hit for that pair applies again. This holds identically for contact hits and weapon hits.
+*For any* attacker-target pair with an active Hit_Cooldown, a repeated hit between that pair applies no damage, no knockback, and no status change and leaves both Balls' state unchanged; each Step decrements an active cooldown's remaining time by exactly one timestep; and once the cooldown reaches zero a subsequent hit for that pair applies again. This holds for weapon hits.
 
 **Validates: Requirements 7.7, 7.8, 10.7**
 
@@ -759,9 +756,9 @@ PBT applies squarely to the Engine (Phases 3–5) because it is a pure, determin
 
 **Validates: Requirements 8.4**
 
-### Property 14: Contact collision applies damage once and knockback along the center line
+### Property 14: Ball collisions deal no damage; weapon hits knock back along the center line
 
-*For any* colliding pair where a striking Ball has `contactDamage` greater than zero and no active Hit_Cooldown exists for that ordered pair, the Engine applies that `contactDamage` through `applyDamage` with source `contact` exactly once, starts the pair's Hit_Cooldown, and applies a knockback impulse to the struck Ball directed along the line from the striker's center to the struck Ball's center.
+*For any* colliding pair of Balls, the collision applies no damage and emits no `damage` event. *For any* applied weapon hit, the Engine applies a knockback impulse to the struck Ball directed along the line from the attacker's center to the struck Ball's center.
 
 **Validates: Requirements 8.5, 8.6**
 
@@ -783,9 +780,9 @@ PBT applies squarely to the Engine (Phases 3–5) because it is a pure, determin
 
 **Validates: Requirements 9.6**
 
-### Property 18: Spike reflects contact damage to the attacker
+### Property 18: Spike reflects weapon/projectile damage to the attacker
 
-*For any* `contact` damage taken by a Ball with the Spike skill from a living attacker, the Engine applies the configured reflected amount to the attacker through `applyDamage` with the `isReflected` flag set.
+*For any* `weapon` or `projectile` damage taken by a Ball with the Spike skill from a living attacker, the Engine applies the configured reflected amount to the attacker through `applyDamage` with the `isReflected` flag set.
 
 **Validates: Requirements 9.7**
 
@@ -932,7 +929,7 @@ Each correctness property maps to exactly one `fast-check` property test, each c
 
 Generators:
 - **Seeds**: integers in [0, 4,294,967,295], plus out-of-range/non-integer generators for Property 3.
-- **Duel_Config / BallConfig / ArenaConfig**: arbitraries for radii, HP, contact damage (including 0), positions/velocities, skill and weapon loadouts drawn from the registries. Generators deliberately include edge cases: whitespace/empty ids, zero contact damage, balls starting in contact, balls at wall boundaries, non-ASCII in string fields, and large step counts.
+- **Duel_Config / BallConfig / ArenaConfig**: arbitraries for radii, HP, positions/velocities, skill and weapon loadouts drawn from the registries. Generators deliberately include edge cases: whitespace/empty ids, balls starting in contact, balls at wall boundaries, non-ASCII in string fields, and large step counts.
 - **applyDamage inputs**: valid and invalid amounts (including ≤ 0), present/absent targets, in-union and out-of-union source tags, empty and non-empty attacker ids, reflected flag set/clear.
 - **Status effects**: durations and intervals as whole timesteps including boundary values (duration 0, interval 1).
 - **Store state**: arbitraries for Library/Settings states for the round-trip and sanitization properties, including out-of-bound and absent fields.

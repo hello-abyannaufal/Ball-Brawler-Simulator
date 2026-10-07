@@ -125,7 +125,7 @@ const hitProjectileProc: ProceduralDraw = (ctx, w, h) => {
   }
 }
 
-// ---- Generic icon fallback (badge for skills, plain for weapons) ----
+// ---- Generic icon fallback (badge variant reserved for skills, plain for weapons) ----
 function iconProc(color: string, badge: boolean): ProceduralDraw {
   return (ctx, w, h) => {
     if (badge) {
@@ -166,13 +166,6 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'icon:weapon:spear': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
   'icon:weapon:orbiting-blade': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steelDark, false) },
   'icon:weapon:bow': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
-
-  // Skill icons (badge frame).
-  'icon:skill:vampire': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.red, true) },
-  'icon:skill:spike': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, true) },
-  'icon:skill:blaster': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.cyan, true) },
-  'icon:skill:splitter': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.green, true) },
-  'icon:skill:grower': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.purple, true) },
 
   // Weapon procedural fallbacks are also exposed under *:proc ids so the
   // renderer can prefer them if an image fails to load.
