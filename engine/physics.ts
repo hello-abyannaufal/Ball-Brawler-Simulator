@@ -77,6 +77,41 @@ export function separateBalls(a: Ball, b: Ball): void {
 }
 
 /**
+ * Elastic bounce between two balls along their center line. Reflects the
+ * velocity components that point INTO the collision so the balls separate
+ * instead of sticking. Equal-mass, fully elastic (swap of normal components).
+ * Tangential motion is preserved. Does nothing if they are already moving
+ * apart.
+ */
+export function bounceBalls(a: Ball, b: Ball): void {
+  let nx = b.position.x - a.position.x
+  let ny = b.position.y - a.position.y
+  let dist = Math.sqrt(nx * nx + ny * ny)
+  if (dist === 0) {
+    nx = 1
+    ny = 0
+    dist = 1
+  }
+  nx /= dist
+  ny /= dist
+
+  // Relative velocity along the normal (a → b).
+  const rvx = b.velocity.x - a.velocity.x
+  const rvy = b.velocity.y - a.velocity.y
+  const velAlongNormal = rvx * nx + rvy * ny
+
+  // Already separating: nothing to do.
+  if (velAlongNormal > 0) return
+
+  // Equal mass fully elastic: exchange the normal components.
+  const impulse = velAlongNormal // negative
+  a.velocity.x += impulse * nx
+  a.velocity.y += impulse * ny
+  b.velocity.x -= impulse * nx
+  b.velocity.y -= impulse * ny
+}
+
+/**
  * Apply a knockback impulse to `struck`, directed along the line from the
  * striker's center to the struck ball's center (Req 8.6).
  */

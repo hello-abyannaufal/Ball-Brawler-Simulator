@@ -7,6 +7,7 @@ import { skillRegistry } from './registry'
  */
 export const grower: SkillDefinition = {
   id: 'grower',
+  iconId: 'icon:skill:grower',
   config: { radiusGain: 1, speedGain: 10 },
   onWallBounce(ctx) {
     const { ball } = ctx
@@ -16,6 +17,7 @@ export const grower: SkillDefinition = {
     const vy = ball.velocity.y
     const mag = Math.sqrt(vx * vx + vy * vy)
     const speedGain = ctx.config.speedGain!
+    ball.cruiseSpeed += speedGain
     if (mag === 0) return
     const newMag = mag + speedGain
     ball.velocity.x = (vx / mag) * newMag

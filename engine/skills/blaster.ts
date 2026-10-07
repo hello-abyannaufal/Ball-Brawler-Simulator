@@ -8,6 +8,7 @@ import { skillRegistry } from './registry'
  */
 export const blaster: SkillDefinition = {
   id: 'blaster',
+  iconId: 'icon:skill:blaster',
   config: {
     fireInterval: 60,
     projectileSpeed: 120,

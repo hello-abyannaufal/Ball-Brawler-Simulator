@@ -9,6 +9,7 @@ import { applyDamage } from '../damage'
  */
 export const spike: SkillDefinition = {
   id: 'spike',
+  iconId: 'icon:skill:spike',
   config: { reflectAmount: 2 },
   onHurt(ctx) {
     if (ctx.source?.tag !== 'contact') return

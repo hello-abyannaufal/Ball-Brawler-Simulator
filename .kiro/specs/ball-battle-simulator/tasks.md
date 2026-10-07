@@ -224,33 +224,41 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
 - [x] 15. Checkpoint — Phases 4–5 skills and weapons complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 16. Phase 6 — Retro sprite system, Versus page, renderer, and lifecycle
-  - [ ] 16.0 Implement the retro sprite/asset system (hybrid: procedural + optional PNG)
+- [x] 16. Phase 6 — Retro sprite system, Versus page, renderer, and lifecycle
+  - [x] 16.0 Implement the retro sprite/asset system (hybrid: procedural + optional PNG)
     - Create `assets/sprites/manifest.ts`: a typed registry mapping every `spriteId` to its source. Each entry is either `{ kind: 'procedural'; draw(ctx, size) }` (pixel grid drawn in code) or `{ kind: 'image'; src: string }` (PNG under `public/sprites/`). Procedural is the default so the game runs with zero external files; an entry can later be swapped to an image with no logic change.
     - Create `composables/useSprites.ts` (client-only): preloads/caches sprite canvases at the base pixel grid (entities 32×32, spear 48×12, projectile 8×8, icons 16×16), renders them with `imageSmoothingEnabled = false` at integer scale, and exposes `drawSprite(ctx, spriteId, x, y, scale, angle?)`. Missing/failed images fall back to a visible placeholder sprite, never a crash.
     - Add a global retro look: register one bitmap pixel font (8px tall) and a 9-slice panel/button helper (tile 8×8) usable across pages.
     - Keep this layer entirely in the app/client; the engine stays sprite-agnostic.
     - _Requirements: 11.5, 11.6_
-  - [ ] 16.0b Add optional visual-reference ids to engine data (no logic change)
+  - [x] 16.0b Add optional visual-reference ids to engine data (no logic change)
     - Add optional, logic-free fields so the renderer can map engine entities to sprites: `spriteId?: string`, `iconId?: string` and `pivot?: { x: number; y: number }` (sprite-pixel rotation point, see assets-plan.md Pivot table) on `WeaponDefinition`, and `iconId?: string` on `SkillDefinition`. These are pure identifiers consumed only by the app layer; the engine ignores them and determinism is unaffected. Set them on the five starter weapons (`sword`,`hammer`,`spear`,`orbiting-blade`,`bow`) and five starter skills.
     - _Requirements: 11.5_
-  - [ ] 16.1 Provide default balls, ball appearance model, and HP-bar clamp helper
+  - [x] 16.1 Provide default balls, ball appearance model, and HP-bar clamp helper
     - Add at least two default balls so Versus runs without login or saved content. Give `BallConfig` an optional `appearance` field (data only, engine stays pure): `{ type: 'color'; value: string } | { type: 'pattern'; patternId: string } | { type: 'image'; src: string }`, defaulting to a solid color. The renderer draws a ball by clipping a circle (`ctx.arc` + `ctx.clip`) and filling it per `appearance` (solid color, pixel pattern, or user image) — no ball sprite asset is required. Add a pure `hpBarFraction(hp, maxHp)` clamped to `[0, 1]`.
     - _Requirements: 11.3, 11.7_
   - [ ]* 16.2 Write property test for HP-bar clamp
     - **Property 28: HP bar fraction is clamped**
     - **Validates: Requirements 11.7**
-  - [ ] 16.3 Implement the client-only duel composable and retro renderer
+  - [x] 16.3 Implement the client-only duel composable and retro renderer
     - Create `composables/useVersusDuel.ts` (client-only): owns the rAF loop advancing the engine by whole steps scaled by simulation speed, draws the World to a 2D canvas context once per frame, updates `hp`/`winner`/`lastEvent` `shallowRef`s at most once per frame, never deep-binds entity state into Vue. `rematch()` re-runs the same seed+config; `dispose()` cancels rAF and drops listeners.
     - Render in retro pixel style via `useSprites` with `imageSmoothingEnabled = false` and integer scaling: draw a tiled arena floor + wall border, balls via the `appearance` circle-clip fill, weapons via their `spriteId` sprite rotated by the `WeaponEntity` angle around `WeaponDefinition.pivot` (default left-middle). Held weapons are anchored at the ball's surface (`owner.position + facing × owner.radius`), NOT at `WeaponEntity.position`, which the engine keeps at the hitbox center for collision; orbit weapons are anchored at `WeaponEntity.position`, projectiles as the 8×8 projectile sprite, and HP bars with a 9-slice frame + fill. Draw the pixel font for labels.
     - Add a `showHitboxes` debug overlay (off by default): draw each weapon's logical hitbox outline (`segment`/`circle` from `WeaponDefinition.hitbox`) over the sprite so sprite-vs-hitbox alignment can be verified. IMPORTANT: hitboxes remain geometric data in the engine and are the single source of collision truth; sprites are visual only and are tuned to cover their hitbox. The renderer never derives collision from sprite pixels.
     - _Requirements: 11.5, 11.6, 11.8, 11.10, 11.11_
-  - [ ] 16.4 Wire the versus page UI
+  - [x] 16.4 Wire the versus page UI
     - Replace the `/versus` placeholder body: select exactly two balls from Library, Roulette results, or default balls; block start with an error when not exactly two; configure the Arena into a `Duel_Config`; render one HP bar per ball (`hpBarFraction`); show a winner screen within 100 ms of `matchEnded`; rematch control; dispose the engine on unmount.
     - _Requirements: 11.1, 11.2, 11.4, 11.9_
   - [ ]* 16.5 Write unit/component tests for versus page
     - Exactly-two-ball selection and error on other counts (11.1, 11.2); at least two default balls (11.3); arena configures into a `Duel_Config` (11.4); winner screen on `matchEnded` (11.9); unmount disposes engine, cancels rAF, removes listeners (11.11).
     - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.9, 11.11_
+  - [x] 16.6 Rework weapon behavior: all-orbit motion, facing-triggered projectiles, physical clash
+    - Design revision agreed during Phase 6 playtest. Keep both `WeaponMode` values in the type for extensibility, but make every starter weapon `orbit`.
+    - Motion: all weapons orbit with a STATIC `angularSpeed` from the definition — remove the `held` orient-toward-target path from `moveWeapons`. (Future: a skill may modify a weapon's spin speed; not now.)
+    - Projectile firing (bow and any weapon with `projectile`): spawn a projectile only when the weapon is currently facing an opponent — the orbit angle points toward the nearest living opponent within a ±15° threshold — AND the fire cooldown is ready. Range (near or far) does not matter. Firing stays deterministic (derived from positions/angles + fixed cooldown, no wall-clock).
+    - Clash gets a physical effect: on any weapon-vs-weapon overlap, apply knockback to BOTH owner balls along their center line (reuse `applyKnockback`), resolve the outcome by weight (`bounce`/`parry`/`disarm`, Hammer never `parry`), emit exactly one `weaponClash` event, and apply NO damage and NO change to weapon spin (angularSpeed stays static).
+    - Bow deals no contact/melee damage (its `damage` is 0, so it is skipped by `applyWeaponHits`) but still participates in clash/parry/knockback.
+    - Update the five weapon defs to `mode: 'orbit'`; update the renderer anchor accordingly (orbit weapons at `WeaponEntity.position`). Re-verify determinism (two identical runs byte-identical) and re-test in the browser.
+    - _Requirements: 10.4, 10.6, 10.7, 10.8, 10.9, 10.10, 10.12_
 
 - [ ] 17. Phase 7 — Roulette and library store
   - [ ] 17.1 Implement the seeded roulette draw

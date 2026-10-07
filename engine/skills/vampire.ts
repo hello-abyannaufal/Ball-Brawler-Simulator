@@ -7,6 +7,7 @@ import { skillRegistry } from './registry'
  */
 export const vampire: SkillDefinition = {
   id: 'vampire',
+  iconId: 'icon:skill:vampire',
   config: { healFraction: 0.3 },
   onHit(ctx) {
     const dealt = ctx.dealt?.amount ?? 0

@@ -6,7 +6,7 @@ import type { WeaponInstance } from './weapons/types'
 import { World } from './world'
 import { createRng } from './rng'
 import { applyDamage } from './damage'
-import { resolveWallCollision, ballsOverlap, separateBalls, applyKnockback } from './physics'
+import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback } from './physics'
 import { runStatusEffects } from './status'
 import { CooldownTable } from './cooldown'
 import { skillRegistry } from './skills/registry'
@@ -15,7 +15,6 @@ import {
   weaponHitsBall,
   weaponsOverlap,
   resolveClash,
-  unitToward,
 } from './weapons/combat'
 
 export const engineVersion = '1.0.0' // non-empty string (Req 5.8)
@@ -25,6 +24,15 @@ export const TIMESTEP = 1 / 60 // seconds (Req 5.4)
 const CONTACT_COOLDOWN_STEPS = 30
 /** Knockback impulse magnitude applied on a contact hit. */
 const CONTACT_KNOCKBACK = 50
+/** Debounce between repeated clashes of the same weapon pair, in steps. */
+const CLASH_COOLDOWN_STEPS = 10
+/** Base knockback magnitude applied to both balls on a weapon clash. */
+const CLASH_KNOCKBACK = 120
+/** Steps a disarmed weapon stays harmless. */
+const DISARM_STUN_STEPS = 40
+/** Per-step fraction of the gap between current speed and cruise speed that
+ *  is closed. Knockback is a burst that fades instead of accumulating. */
+const SPEED_RECOVERY = 0.04
 
 export interface EngineOptions {
   seed: number
@@ -87,6 +95,7 @@ export function createEngine(opts: EngineOptions): Engine {
       hp: bc.maxHp,
       maxHp: bc.maxHp,
       contactDamage: bc.contactDamage,
+      cruiseSpeed: Math.hypot(bc.initialVelocity.x, bc.initialVelocity.y),
       skills,
       weapons,
       statusEffects: [],
@@ -104,6 +113,8 @@ export function createEngine(opts: EngineOptions): Engine {
         ownerId: ball.id,
         def: inst.def,
         angle: 0,
+        angularSpeed: inst.def.angularSpeed, // runtime; flips on clash
+        stunSteps: 0,
         hitbox: inst.def.hitbox,
       }
       world.add(we)
@@ -112,6 +123,11 @@ export function createEngine(opts: EngineOptions): Engine {
 
   const cooldowns = new CooldownTable()
   const weaponFireTimers = new Map<EntityId, number>()
+  // Weapon pairs overlapping last step: a clash fires only when a pair first
+  // touches, not on every frame of a sustained overlap.
+  let touchingPairs = new Set<string>()
+  // Weapons that clashed this step: blocked, so they deal no damage this step.
+  const clashedThisStep = new Set<EntityId>()
   let ended = false
   let winner: EntityId | null | undefined = undefined
 
@@ -160,7 +176,18 @@ export function createEngine(opts: EngineOptions): Engine {
     return best
   }
 
-  // op 1: move weapons according to their mode (Req 10.4, 10.5).
+  // Projectile fires only when the weapon faces an opponent within this cone.
+  const FACING_THRESHOLD = (15 * Math.PI) / 180 // ±15°
+
+  /** Smallest absolute difference between two angles, in [0, π]. */
+  function angleDiff(a: number, b: number): number {
+    let d = (a - b) % (Math.PI * 2)
+    if (d > Math.PI) d -= Math.PI * 2
+    if (d < -Math.PI) d += Math.PI * 2
+    return Math.abs(d)
+  }
+
+  // op 1: move weapons. All starter weapons orbit with a static angularSpeed.
   function moveWeapons(): void {
     for (const w of liveWeapons()) {
       const owner = world.ballById(w.ownerId)
@@ -168,53 +195,58 @@ export function createEngine(opts: EngineOptions): Engine {
         w.alive = false // owner gone: drop the weapon
         continue
       }
-      if (w.def.mode === 'orbit') {
-        w.angle += w.def.angularSpeed * TIMESTEP
-        const orbitRadius = owner.radius + w.def.length
-        w.position = {
-          x: owner.position.x + Math.cos(w.angle) * orbitRadius,
-          y: owner.position.y + Math.sin(w.angle) * orbitRadius,
-        }
-      } else {
-        // held: position at owner, oriented toward the target.
-        const target = nearestOpponent(owner.id, owner.position)
-        w.position = { ...owner.position }
-        if (target) {
-          const u = unitToward(owner.position, target.position)
-          w.angle = Math.atan2(u.y, u.x)
-          // Project the hitbox center out along the facing direction.
-          w.position = {
-            x: owner.position.x + u.x * (owner.radius + w.def.length / 2),
-            y: owner.position.y + u.y * (owner.radius + w.def.length / 2),
-          }
-        }
+
+      // Orbit motion (Req 10.4). Uses the runtime angularSpeed (base magnitude
+      // from the def; its SIGN flips when the weapon clashes — a struck blade
+      // is knocked into reverse spin). The weapon spans [surface, surface +
+      // length]: a segment hitbox is centered on that span, a circle hitbox
+      // (hammer head, orbiting blade) sits at its far end.
+      w.angle += w.angularSpeed * TIMESTEP
+      if (w.stunSteps > 0) w.stunSteps -= 1
+      const orbitRadius =
+        w.hitbox.shape === 'circle'
+          ? owner.radius + w.def.length - w.hitbox.radius
+          : owner.radius + w.def.length / 2
+      w.position = {
+        x: owner.position.x + Math.cos(w.angle) * orbitRadius,
+        y: owner.position.y + Math.sin(w.angle) * orbitRadius,
       }
 
-      // Weapons with projectile settings fire on interval (Req 10.10, e.g. Bow).
+      // Projectile weapons (e.g. Bow) fire only while facing an opponent AND
+      // the cooldown is ready (Req 10.10). Range does not matter.
       if (w.def.projectile) {
         const ps = w.def.projectile
-        const t = (weaponFireTimers.get(w.id) ?? 0) + 1
-        if (t >= ps.fireInterval) {
+        const timer = weaponFireTimers.get(w.id) ?? ps.fireInterval
+        const ready = timer >= ps.fireInterval
+        const target = nearestOpponent(owner.id, owner.position)
+        let facing = false
+        if (target) {
+          const toTarget = Math.atan2(
+            target.position.y - owner.position.y,
+            target.position.x - owner.position.x,
+          )
+          facing = angleDiff(w.angle, toTarget) <= FACING_THRESHOLD
+        }
+
+        if (ready && facing) {
           weaponFireTimers.set(w.id, 0)
-          const u = unitToward(owner.position, {
-            x: owner.position.x + Math.cos(w.angle),
-            y: owner.position.y + Math.sin(w.angle),
-          })
+          const dx = Math.cos(w.angle)
+          const dy = Math.sin(w.angle)
           world.add({
             id: world.allocateId(),
             kind: 'projectile',
             position: {
-              x: w.position.x + u.x * ps.radius,
-              y: w.position.y + u.y * ps.radius,
+              x: w.position.x + dx * ps.radius,
+              y: w.position.y + dy * ps.radius,
             },
-            velocity: { x: u.x * ps.speed, y: u.y * ps.speed },
+            velocity: { x: dx * ps.speed, y: dy * ps.speed },
             alive: true,
             radius: ps.radius,
             damage: ps.damage,
             ownerId: w.ownerId,
           })
         } else {
-          weaponFireTimers.set(w.id, t)
+          weaponFireTimers.set(w.id, Math.min(timer + 1, ps.fireInterval))
         }
       }
     }
@@ -223,16 +255,58 @@ export function createEngine(opts: EngineOptions): Engine {
   // op 3: resolve weapon clashes — no direct damage, one event each (Req 10.8, 10.9).
   function resolveWeaponClashes(): void {
     const weapons = liveWeapons()
+    const nowTouching = new Set<string>()
+    clashedThisStep.clear()
     for (let i = 0; i < weapons.length; i++) {
       for (let j = i + 1; j < weapons.length; j++) {
         const a = weapons[i]!
         const b = weapons[j]!
         if (a.ownerId === b.ownerId) continue // same ball's weapons don't clash
         if (!weaponsOverlap(a, b)) continue
+        const pairKey = `${a.id}:${b.id}`
+        nowTouching.add(pairKey)
+        clashedThisStep.add(a.id)
+        clashedThisStep.add(b.id)
+        // Only the first frame of contact clashes; plus a short debounce so
+        // blades grazing in and out don't chatter.
+        if (touchingPairs.has(pairKey)) continue
+        if (cooldowns.isActive(a.id, b.id)) continue
+        cooldowns.start(a.id, b.id, CLASH_COOLDOWN_STEPS)
+
         const outcome = resolveClash(a, b, world.rng)
         world.emit({ type: 'weaponClash', a: a.id, b: b.id, outcome })
+
+        // Spin reaction. bounce/parry: both blades rebound (spin flips).
+        // disarm: the heavier blade powers through (keeps its spin), the
+        // lighter one is knocked back AND stunned (deals no damage briefly).
+        const wa = a.def.weight
+        const wb = b.def.weight
+        if (outcome === 'disarm' && wa !== wb) {
+          const loser = wa < wb ? a : b
+          loser.angularSpeed = -loser.angularSpeed
+          loser.stunSteps = DISARM_STUN_STEPS
+        } else {
+          a.angularSpeed = -a.angularSpeed
+          b.angularSpeed = -b.angularSpeed
+        }
+
+        // ...and knock BOTH owner balls apart along their center line
+        // (Req 10.8 forbids damage, not knockback).
+        const oa = world.ballById(a.ownerId)
+        const ob = world.ballById(b.ownerId)
+        if (oa && ob) {
+          const mag =
+            outcome === 'disarm'
+              ? CLASH_KNOCKBACK * 1.5
+              : outcome === 'parry'
+                ? CLASH_KNOCKBACK * 0.6
+                : CLASH_KNOCKBACK
+          applyKnockback(ob, oa, mag) // push oa away from ob
+          applyKnockback(oa, ob, mag) // push ob away from oa
+        }
       }
     }
+    touchingPairs = nowTouching
   }
 
   // op 4 (weapon part): weapon hitbox vs opposing ball (Req 10.6, 10.7).
@@ -241,10 +315,13 @@ export function createEngine(opts: EngineOptions): Engine {
       const owner = world.ballById(w.ownerId)
       if (!owner) continue
       if (w.def.damage <= 0) continue
+      if (w.stunSteps > 0 || clashedThisStep.has(w.id)) continue // disarmed / blocked
       for (const ball of world.aliveBalls()) {
         if (ball.id === w.ownerId) continue
         if (!weaponHitsBall(w, ball)) continue
-        if (cooldowns.isActive(w.ownerId, ball.id)) continue
+        // Keyed by the weapon (not the owner) so it doesn't share the
+        // contact-damage cooldown; uses the weapon's own hitCooldown.
+        if (cooldowns.isActive(w.id, ball.id)) continue
 
         const outcome = applyDamage(world, {
           source: { tag: 'weapon' },
@@ -253,7 +330,8 @@ export function createEngine(opts: EngineOptions): Engine {
           amount: w.def.damage,
         })
         if (outcome.kind === 'applied') {
-          cooldowns.start(w.ownerId, ball.id, CONTACT_COOLDOWN_STEPS)
+          cooldowns.start(w.id, ball.id, Math.round(w.def.hitCooldown / 1000 / TIMESTEP))
+          applyKnockback(owner, ball, CONTACT_KNOCKBACK)
           fireSkillHook(owner, 'onHit', {
             source: { tag: 'weapon' },
             dealt: { targetId: ball.id, amount: outcome.applied },
@@ -332,6 +410,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     // (1) move balls and weapons
     for (const ball of world.aliveBalls()) {
+      regulateSpeed(ball)
       ball.position.x += ball.velocity.x * TIMESTEP
       ball.position.y += ball.velocity.y * TIMESTEP
       const bounced = resolveWallCollision(ball, world.arena)
@@ -351,6 +430,7 @@ export function createEngine(opts: EngineOptions): Engine {
         const b = balls[j]!
         if (ballsOverlap(a, b)) {
           separateBalls(a, b)
+          bounceBalls(a, b) // reflect velocities so they don't stick
           contacts.push([a, b])
         }
       }
@@ -382,6 +462,19 @@ export function createEngine(opts: EngineOptions): Engine {
     }
 
     world.tick += 1
+  }
+
+  /**
+   * Ease the ball's speed toward its cruise speed. Walls and ball-ball bounces
+   * are elastic and knockback only ADDS velocity, so without this balls speed
+   * up every exchange until the duel is unreadable.
+   */
+  function regulateSpeed(ball: Ball): void {
+    const speed = Math.hypot(ball.velocity.x, ball.velocity.y)
+    if (speed === 0) return
+    const target = speed + (ball.cruiseSpeed - speed) * SPEED_RECOVERY
+    ball.velocity.x *= target / speed
+    ball.velocity.y *= target / speed
   }
 
   /** Striker deals contact damage to struck if eligible, then knockback. */

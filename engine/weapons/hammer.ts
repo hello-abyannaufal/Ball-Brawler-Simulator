@@ -5,14 +5,18 @@ import { weaponRegistry } from './registry'
 export const hammer: WeaponDefinition = {
   id: 'hammer',
   name: 'Hammer',
-  mode: 'held',
-  length: 18,
+  mode: 'orbit',
+  length: 42,
   damage: 12,
-  angularSpeed: 0,
+  angularSpeed: 2.4, // heavy = slow spin
   weight: 30, // heaviest starter
   hitCooldown: 900,
-  hitbox: { shape: 'circle', radius: 10 },
+  hitbox: { shape: 'circle', radius: 16 }, // the head, at the tip
   cannotBeParried: true,
+  spriteId: 'weapon:hammer',
+  iconId: 'icon:weapon:hammer',
+  pivot: { x: 5, y: 16 },
+  spriteReach: 26,
 }
 
 weaponRegistry.register(hammer)

@@ -1,6 +1,5 @@
 import type { SkillInstance } from './skills/types'
-import type { WeaponInstance } from './weapons/types'
-import type { WeaponDefinition, Hitbox } from './weapons/types'
+import type { WeaponInstance, WeaponDefinition, Hitbox  } from './weapons/types'
 import type { StatusEffect } from './status'
 
 export type EntityId = number // monotonically increasing, stable order
@@ -26,6 +25,7 @@ export interface Ball extends BaseEntity {
   hp: number
   maxHp: number
   contactDamage: number // may be 0
+  cruiseSpeed: number // speed the ball eases back to after knockback
   skills: SkillInstance[]
   weapons: WeaponInstance[]
   statusEffects: StatusEffect[]
@@ -43,6 +43,8 @@ export interface WeaponEntity extends BaseEntity {
   ownerId: EntityId
   def: WeaponDefinition
   angle: number // orbit/orientation
+  angularSpeed: number // runtime spin speed; starts from def, flips on clash
+  stunSteps: number // >0 after being disarmed: no damage until it reaches 0
   hitbox: Hitbox // resolved world-space hitbox this step
 }
 

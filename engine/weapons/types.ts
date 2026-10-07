@@ -23,6 +23,12 @@ export interface WeaponDefinition {
   readonly hitbox: Hitbox
   readonly projectile?: ProjectileSettings // optional (Req 10.1, 10.10)
   readonly cannotBeParried?: boolean // Hammer (Req 10.11, 10.12)
+  // --- Visual-reference only. Ignored by the engine; no effect on simulation
+  //     or determinism. Consumed solely by the app-layer renderer. ---
+  readonly spriteId?: string // arena sprite id
+  readonly iconId?: string // 16x16 roulette/library icon id
+  readonly pivot?: { x: number; y: number } // sprite-pixel rotation point
+  readonly spriteReach?: number // sprite pixels from pivot to tip; renderer scale = length / spriteReach
 }
 
 /** A weapon carried by a ball, resolved from a WeaponRef against the registry. */

@@ -1,29 +1,88 @@
 import type { Ball, Vec2, WeaponEntity } from '../entities'
-import type { Hitbox } from './types'
 import type { Rng } from '../rng'
 
-/** Effective collision radius of a weapon hitbox for overlap tests. */
-export function hitboxReach(hitbox: Hitbox): number {
-  if (hitbox.shape === 'circle') return hitbox.radius
-  // segment: approximate as a circle covering half its length plus thickness.
-  return hitbox.length / 2 + hitbox.thickness / 2
+type Segment = { ax: number; ay: number; bx: number; by: number }
+
+/**
+ * World-space segment of a segment hitbox: centered on the weapon position and
+ * laid along its angle (spans ball surface -> blade tip).
+ */
+function bladeSegment(w: WeaponEntity, length: number): Segment {
+  const hx = (Math.cos(w.angle) * length) / 2
+  const hy = (Math.sin(w.angle) * length) / 2
+  return {
+    ax: w.position.x - hx,
+    ay: w.position.y - hy,
+    bx: w.position.x + hx,
+    by: w.position.y + hy,
+  }
 }
 
-/** True if a weapon's hitbox circle overlaps a ball. */
+/** Squared distance from point (px, py) to a segment. */
+function pointSegDistSq(px: number, py: number, s: Segment): number {
+  const dx = s.bx - s.ax
+  const dy = s.by - s.ay
+  const lenSq = dx * dx + dy * dy
+  let t = lenSq === 0 ? 0 : ((px - s.ax) * dx + (py - s.ay) * dy) / lenSq
+  t = Math.max(0, Math.min(1, t))
+  const cx = s.ax + dx * t - px
+  const cy = s.ay + dy * t - py
+  return cx * cx + cy * cy
+}
+
+/** Squared distance between two segments (0 when they cross). */
+function segSegDistSq(p: Segment, q: Segment): number {
+  const cross = (ax: number, ay: number, bx: number, by: number) => ax * by - ay * bx
+  const d1 = cross(q.bx - q.ax, q.by - q.ay, p.ax - q.ax, p.ay - q.ay)
+  const d2 = cross(q.bx - q.ax, q.by - q.ay, p.bx - q.ax, p.by - q.ay)
+  const d3 = cross(p.bx - p.ax, p.by - p.ay, q.ax - p.ax, q.ay - p.ay)
+  const d4 = cross(p.bx - p.ax, p.by - p.ay, q.bx - p.ax, q.by - p.ay)
+  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+    return 0
+  }
+  return Math.min(
+    pointSegDistSq(p.ax, p.ay, q),
+    pointSegDistSq(p.bx, p.by, q),
+    pointSegDistSq(q.ax, q.ay, p),
+    pointSegDistSq(q.bx, q.by, p),
+  )
+}
+
+/**
+ * Squared distance from a point to a weapon's hitbox core (segment axis or
+ * circle center), plus the hitbox's own half-width / radius.
+ */
+function distToHitbox(w: WeaponEntity, px: number, py: number): { distSq: number; pad: number } {
+  const h = w.hitbox
+  if (h.shape === 'circle') {
+    const dx = px - w.position.x
+    const dy = py - w.position.y
+    return { distSq: dx * dx + dy * dy, pad: h.radius }
+  }
+  return { distSq: pointSegDistSq(px, py, bladeSegment(w, h.length)), pad: h.thickness / 2 }
+}
+
+/** True if a weapon's actual hitbox shape overlaps a ball. */
 export function weaponHitsBall(weapon: WeaponEntity, ball: Ball): boolean {
-  const reach = hitboxReach(weapon.hitbox)
-  const dx = ball.position.x - weapon.position.x
-  const dy = ball.position.y - weapon.position.y
-  const sum = reach + ball.radius
-  return dx * dx + dy * dy <= sum * sum
+  const { distSq, pad } = distToHitbox(weapon, ball.position.x, ball.position.y)
+  const sum = pad + ball.radius
+  return distSq <= sum * sum
 }
 
-/** True if two weapon hitbox circles overlap. */
+/** True if two weapon hitboxes (segment/circle, any mix) overlap. */
 export function weaponsOverlap(a: WeaponEntity, b: WeaponEntity): boolean {
-  const sum = hitboxReach(a.hitbox) + hitboxReach(b.hitbox)
-  const dx = b.position.x - a.position.x
-  const dy = b.position.y - a.position.y
-  return dx * dx + dy * dy <= sum * sum
+  const ha = a.hitbox
+  const hb = b.hitbox
+  if (ha.shape === 'segment' && hb.shape === 'segment') {
+    const sum = (ha.thickness + hb.thickness) / 2
+    return segSegDistSq(bladeSegment(a, ha.length), bladeSegment(b, hb.length)) <= sum * sum
+  }
+  // At least one circle: measure from the circle's center to the other shape.
+  const [circle, other] = ha.shape === 'circle' ? [a, b] : [b, a]
+  const r = (circle.hitbox as { radius: number }).radius
+  const { distSq, pad } = distToHitbox(other, circle.position.x, circle.position.y)
+  const sum = r + pad
+  return distSq <= sum * sum
 }
 
 export type ClashOutcome = 'bounce' | 'parry' | 'disarm'

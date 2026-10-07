@@ -1,5 +1,7 @@
 import type { EntityId } from './entities'
 
+import type { World } from './world'
+
 export type DamageSourceTag =
   // active in phases 3-5
   | 'contact'
@@ -53,8 +55,6 @@ export type ApplyDamageOutcome =
   | { kind: 'noop'; reason: 'non-positive-amount' }
   | { kind: 'target-not-found' }
   | { kind: 'invalid-source' }
-
-import type { World } from './world'
 
 const VALID_TAGS = new Set<DamageSourceTag>(DAMAGE_SOURCE_TAGS)
 

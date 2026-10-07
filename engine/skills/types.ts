@@ -18,6 +18,8 @@ export interface SkillContext {
 export interface SkillDefinition {
   readonly id: string // unique non-empty (Req 9.1)
   readonly config: Readonly<Record<string, number>>
+  // Visual-reference only; ignored by the engine (no determinism effect).
+  readonly iconId?: string // 16x16 roulette/library icon id
   onTick?(ctx: SkillContext): void
   onHit?(ctx: SkillContext): void // this ball dealt damage
   onHurt?(ctx: SkillContext): void // this ball took damage

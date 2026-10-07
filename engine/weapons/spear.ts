@@ -5,13 +5,17 @@ import { weaponRegistry } from './registry'
 export const spear: WeaponDefinition = {
   id: 'spear',
   name: 'Spear',
-  mode: 'held',
-  length: 40, // longest starter
+  mode: 'orbit',
+  length: 72, // longest starter
   damage: 5,
-  angularSpeed: 0,
+  angularSpeed: 3.0,
   weight: 8,
   hitCooldown: 600,
-  hitbox: { shape: 'segment', length: 40, thickness: 3 },
+  hitbox: { shape: 'segment', length: 72, thickness: 8 },
+  spriteId: 'weapon:spear',
+  iconId: 'icon:weapon:spear',
+  pivot: { x: 6, y: 6 },
+  spriteReach: 42,
 }
 
 weaponRegistry.register(spear)

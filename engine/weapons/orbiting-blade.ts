@@ -6,12 +6,16 @@ export const orbitingBlade: WeaponDefinition = {
   id: 'orbiting-blade',
   name: 'Orbiting Blade',
   mode: 'orbit',
-  length: 25, // orbit radius offset
+  length: 28, // gap from ball surface to the blade's outer edge
   damage: 4,
-  angularSpeed: 4, // rad/s
+  angularSpeed: 5, // rad/s
   weight: 6,
   hitCooldown: 300,
-  hitbox: { shape: 'circle', radius: 6 },
+  hitbox: { shape: 'circle', radius: 14 },
+  spriteId: 'weapon:orbiting-blade',
+  iconId: 'icon:weapon:orbiting-blade',
+  pivot: { x: 9, y: 16 },
+  spriteReach: 14,
 }
 
 weaponRegistry.register(orbitingBlade)

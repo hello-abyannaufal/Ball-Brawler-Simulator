@@ -9,6 +9,7 @@ import { skillRegistry } from './registry'
  */
 export const splitter: SkillDefinition = {
   id: 'splitter',
+  iconId: 'icon:skill:splitter',
   config: {
     splitCount: 2,
     radiusFactor: 0.5,
@@ -41,6 +42,7 @@ export const splitter: SkillDefinition = {
         hp: childHp,
         maxHp: childHp,
         contactDamage: ball.contactDamage,
+        cruiseSpeed: speed,
         skills: [], // children do not re-split (no inherited skills)
         weapons: [],
         statusEffects: [],
