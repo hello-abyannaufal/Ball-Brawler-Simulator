@@ -836,7 +836,7 @@ PBT applies squarely to the Engine (Phases 3–5) because it is a pure, determin
 
 ### Property 27: Roulette draws reproducibly from current registries
 
-*For any* seed and non-empty Skill_Registry and Weapon_Registry, a spin selects exactly one skill id present in the Skill_Registry and one weapon id present in the Weapon_Registry; two spins with the same seed and same registry contents produce identical selections; and the registry contents are unchanged by the spin.
+*For any* seed and wheel with at least one entry of weight > 0, a spin selects exactly one entry id with weight > 0 (never a weight-0 entry); two spins with the same seed and same entries/weights produce identical selections; over many seeds each entry is drawn with frequency ≈ weight / total; and the input entries are unchanged by the spin. (Skill wheel deferred with Requirement 9.)
 
 **Validates: Requirements 12.1, 12.3, 12.5**
 

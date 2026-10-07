@@ -276,23 +276,25 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - Requirement 9 and the skill parts of Requirements 12–13 are marked deferred in requirements.md; task 13 is kept for reference. Restore from git history (commit 548a969) when skills come back.
     - _Requirements: 9 (deferred)_
 
-- [ ] 17. Phase 7 — Roulette and library store
-  - [ ] 17.1 Implement the seeded roulette draw
-    - Create `engine/roulette.ts`: `spinRoulette(seed, skills, weapons)` draws exactly one skill id and one weapon id using a seeded `Rng`, selecting only from current registry entries; same seed + same registry contents → identical result; registries unchanged by the spin; throws `EmptyRegistryError` when either registry is empty.
-    - _Requirements: 12.1, 12.3, 12.4, 12.5_
+- [x] 17. Phase 7 — Roulette and library store
+  - [x] 17.1 Implement the seeded roulette draw (weighted, generic wheel)
+    - `engine/roulette.ts`: `spinWheel(seed, segments, which)` draws exactly one segment id with probability weight / total using a seeded `Rng` (weight 0 = excluded), plus a cosmetic `landing` ∈ [0.15, 0.85) inside the slice for the animation. Same seed + same segments → identical result; input unchanged; throws `EmptyRegistryError` when no segment has weight > 0. Generic over the entry kind (weapons now).
+    - _Requirements: 12.1, 12.3, 12.4, 12.5, 12.10, 12.11 (skill parts deferred)_
   - [ ]* 17.2 Write property test for roulette reproducibility
     - **Property 27: Roulette draws reproducibly from current registries**
     - **Validates: Requirements 12.1, 12.3, 12.5**
-  - [ ] 17.3 Implement the library store with persistence, Duel_Config save, and export/import
-    - Create `stores/library.ts`: holds balls/skills/weapons/duels each with a unique id; persists to localStorage within 1 s of change; retains in-memory state and surfaces an error on write failure; loads to empty state on absent/corrupt data without a blocking error. Save a Duel as `{ engineVersion, seed, ballConfigs, arenaConfig }` with `engineVersion` set at save time. Export produces one JSON document with full Library + Settings contents; import validates the shape and replaces both stores, or rejects invalid JSON/shape leaving both unchanged. Shapes JSON-serializable.
+  - [x] 17.3 Implement the library store with persistence, Duel_Config save, and export/import
+    - Create `stores/library.ts`: holds balls/weapons/duels each with a unique id (skills collection kept as an empty array for forward-compat while skills are deferred); persists to localStorage within 1 s of change; retains in-memory state and surfaces an error on write failure; loads to empty state on absent/corrupt data without a blocking error. Save a Duel as `{ engineVersion, seed, ballConfigs, arenaConfig }` with `engineVersion` set at save time. Export produces one JSON document with full Library + Settings contents; import validates the shape and replaces both stores, or rejects invalid JSON/shape leaving both unchanged. Shapes JSON-serializable.
     - _Requirements: 13.1, 13.2, 13.3, 13.4, 13.5, 13.6, 13.7, 13.8, 13.9, 13.10_
   - [ ]* 17.4 Write property test for export/import JSON round-trip
     - **Property 29: Library and settings survive export/import and JSON round-trips**
     - **Validates: Requirements 13.6, 13.7, 13.10**
-  - [ ] 17.5 Wire the roulette page with a pixel reel UI
-    - Replace the `/roulette` placeholder body: spin with a provided integer seed, or generate and record a seed within 2 s when none provided; show an error identifying the empty registry on empty-registry spin; save a result's ball config including the seed to the Library_Store without login; retain the unsaved result and show an error on save failure.
-    - Present the roulette in retro pixel style: a reel/slot strip tiled from a pixel background, skill/weapon shown via their 16×16 `iconId` sprites, a pixel spin button with idle/pressed frames, and a landing highlight/glow overlay. The reel animation is cosmetic only — the actual draw stays the deterministic seeded `spinRoulette` result (visuals must land on that result). Honor reduced-motion by skipping the spin animation and showing the result immediately.
-    - _Requirements: 12.2, 12.6, 12.7, 12.8_
+  - [x] 17.5 Wire the roulette page with a pixel wheel UI
+    - `/roulette`: a single Spin button (no seed input); each spin generates a random seed that is recorded with the result and the saved ball; show the empty-wheel error; save a result's ball config including the seed to the Library_Store without login; retain the unsaved result and show an error on save failure.
+    - `components/RouletteWheel.vue`: pixel-art wheel rasterised per pixel on a 192×192 canvas (hard edges, dark rim/dividers, gold hub, fixed pointer at top) upscaled with `image-rendering: pixelated`; slice size ∝ weight; weapon sprites ride each slice. `spinTo(id, landing, ms)` eases out over ~3.5 s (5 full turns) and stops on the drawn result; reduced motion jumps straight to it. Purely visual — the result is the seeded `spinWheel` draw.
+    - Step flow: `STEPS` in `pages/roulette.vue` lists the wheels in order (Weapon only for now). Each step: Spin / Spin again → Confirm (locks the pick, advances; progress chips show confirmed picks). Last step: required ball name (≤ 24 chars) + Save, storing `SavedBall { name, config, seeds }` (one seed per step); then "Roll another ball" restarts. New wheels are added by appending a step and a `WheelKind`.
+    - `stores/roulette.ts`: persisted per-kind weights (default 10, range 0–100). The page lists every weapon with a slider and its live % share; Reset restores equal weights.
+    - _Requirements: 12.2, 12.6, 12.7, 12.8, 12.9, 12.10, 12.11, 12.12_
   - [ ]* 17.6 Write unit tests for roulette and library
     - No-seed spin generates and records a seed (12.2); empty-registry rejection message (12.4); save stores ball config with the seed (12.7); save-failure handling (12.8); library holds balls/skills/weapons with ids (13.1); invalid import rejected leaving state unchanged (13.8); corrupt/absent load → empty (13.5); saved Duel shape with current `engineVersion` (13.9).
     - _Requirements: 12.2, 12.4, 12.7, 12.8, 13.1, 13.5, 13.8, 13.9_

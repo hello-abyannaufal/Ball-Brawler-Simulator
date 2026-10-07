@@ -250,14 +250,18 @@ The non-negotiable architecture rules from the product brief govern every phase:
 
 #### Acceptance Criteria
 
-1. WHEN a user spins the Roulette with a provided integer seed, THE Roulette SHALL draw exactly one skill and exactly one weapon for a Ball using the seeded RNG, selecting only from entries present in the Skill_Registry and Weapon_Registry at spin time.
-2. IF a user spins the Roulette without providing a seed, THEN THE Roulette SHALL generate an integer seed, record it with the result, and complete the spin within 2 seconds.
+1. WHEN a user spins the Roulette, THE Roulette SHALL draw exactly one skill and exactly one weapon for a Ball using the seeded RNG, selecting only from entries present in the Skill_Registry and Weapon_Registry at spin time.
+2. WHEN a user spins the Roulette, THE Roulette SHALL generate a random integer seed (the user does not enter one), record it with the result, and determine the result within 2 seconds (the cosmetic wheel animation may run longer, up to 4 seconds).
 3. WHEN a user spins the Roulette twice with the same seed and the same Skill_Registry and Weapon_Registry contents, THE Roulette SHALL produce identical skill and weapon selections across both spins.
 4. IF the Skill_Registry or Weapon_Registry contains zero entries at spin time, THEN THE Roulette SHALL reject the spin, retain any previously drawn result, and present an error indication identifying the empty registry.
 5. THE Roulette SHALL reference only existing Skill and Weapon definitions and SHALL NOT create, modify, or delete any skill or weapon behavior.
 6. THE Roulette SHALL complete a spin without an authenticated User, reading from and writing to local persistence only.
 7. WHEN a user chooses to save a Roulette result, THE Scaffold_App SHALL store the resulting Ball configuration, including the seed used, in the Library_Store.
 8. IF saving a Roulette result to the Library_Store fails, THEN THE Scaffold_App SHALL retain the unsaved result and present an error indication reporting the save failure.
+9. THE Roulette SHALL present a pixel-art wheel whose slices are sized proportionally to each entry's weight, and SHALL animate the wheel spinning so the fixed pointer stops on the drawn entry; with `prefers-reduced-motion: reduce` it SHALL show the landed wheel without the spin animation.
+10. THE Roulette SHALL let the user set each entry's weight (0 to 100, 0 removes the entry from the wheel), SHALL persist the weights locally per wheel kind, and SHALL draw with probability weight / total weight; the same seed with the same entries and weights SHALL produce the same result.
+11. THE Roulette SHALL currently offer a weapon wheel only; the draw and wheel SHALL be generic over the entry kind so further wheels (e.g. Trait, Ability) can be added without changing the draw.
+12. THE Roulette SHALL run its wheels as an ordered step flow (currently: Weapon; later e.g. Trait, Ability): on each step the user may re-spin until satisfied, then Confirm to lock the pick and advance; on the last step Confirm is replaced by a required ball-name input and a Save action that stores the ball with all picks and their seeds.
 
 ### Requirement 13: Library and Local Persistence (Phase 7)
 
