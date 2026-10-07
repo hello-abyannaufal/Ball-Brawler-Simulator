@@ -94,6 +94,8 @@ export interface VersusOptions {
   /** prefers-reduced-motion: no hit-stop and no particle motion; the
    *  simulation rate/outcome is unchanged and hit-flashes still show (Req 16.1, 16.2). */
   reducedMotion?: boolean
+  /** Display names, in `ballConfigs` order, for the on-canvas winner label. */
+  names?: string[]
 }
 
 /**
@@ -457,6 +459,12 @@ export function useVersusDuel(
     ctx.restore()
   }
 
+  /** Name of the winning ball: initial balls are created in `ballConfigs` order. */
+  function winnerLabel(id: EntityId): string {
+    const idx = engine!.world.entities.filter((e) => e.kind === 'ball').findIndex((b) => b.id === id)
+    return (opts?.names?.[idx] ?? `BALL ${id}`).toUpperCase()
+  }
+
   function render(): void {
     const el = canvas.value
     if (!el || !engine) return
@@ -490,7 +498,7 @@ export function useVersusDuel(
 
     if (engine.ended) {
       const label =
-        engine.winner === null ? 'DRAW' : `WINNER: ${engine.winner}`
+        engine.winner === null ? 'DRAW' : `WINNER: ${winnerLabel(engine.winner!)}`
       drawText(ctx, label, 8, 8, 2)
     }
   }

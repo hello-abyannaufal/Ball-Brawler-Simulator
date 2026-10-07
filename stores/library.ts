@@ -54,6 +54,10 @@ export const useLibraryStore = defineStore('library', {
       return entry
     },
 
+    removeBall(id: string): void {
+      this.balls = this.balls.filter((b) => b.id !== id)
+    },
+
     addWeapon(weaponId: string): SavedWeapon {
       const entry: SavedWeapon = { id: makeId('weapon'), weaponId }
       this.weapons.push(entry)

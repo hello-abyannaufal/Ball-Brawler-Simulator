@@ -51,3 +51,39 @@ export function stepsForElapsed(realSeconds: number, speed: number): number {
   // Epsilon guards float error (e.g. 0.1 * 60 = 5.999…).
   return Math.floor(realSeconds * 60 * speed + 1e-9)
 }
+
+/** Fallback colors when two picked balls would look the same. */
+const DUEL_COLORS = ['#e43b44', '#0099db', '#63c74d', '#b55088']
+
+/**
+ * Put two picked balls into duel start slots (left / right, mirrored
+ * velocities) so any pair — default or from the Library — starts the same
+ * fair way. Configs are copied, never mutated. If both balls would render the
+ * same solid color, the second is recolored so they stay distinguishable.
+ */
+export function placeForDuel(
+  configs: readonly BallConfig[],
+  arena: { width: number; height: number },
+): BallConfig[] {
+  const slots = [
+    { x: (arena.width * 7) / 18, vx: 180, vy: 90 },
+    { x: (arena.width * 11) / 18, vx: -180, vy: -90 },
+  ]
+  const placed = configs.map((c, i): BallConfig => {
+    const slot = slots[i % slots.length]!
+    return {
+      // JSON round-trip, not structuredClone: Library configs arrive as Pinia
+      // reactive proxies, which structuredClone rejects. BallConfig is JSON-safe.
+      ...(JSON.parse(JSON.stringify(c)) as BallConfig),
+      initialPosition: { x: slot.x, y: arena.height / 2 },
+      initialVelocity: { x: slot.vx, y: slot.vy },
+    }
+  })
+  const [a, b] = placed
+  const colorA = a?.appearance?.type === 'color' ? a.appearance.value.toLowerCase() : null
+  const colorB = b?.appearance?.type === 'color' ? b.appearance.value.toLowerCase() : null
+  if (b && colorA && colorA === colorB) {
+    b.appearance = { type: 'color', value: DUEL_COLORS.find((c) => c !== colorA)! }
+  }
+  return placed
+}

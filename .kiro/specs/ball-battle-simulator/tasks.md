@@ -355,6 +355,17 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - Add the architecture section (each major component, responsibilities, data flow); the extension section with separate step-by-step procedures for adding a Skill, a Weapon, and a new Damage_Source (files to create/modify and steps); the determinism section (how determinism is achieved, how `engineVersion` is defined/incremented/used); and the roles section (how roles evolve, and that the default role must change to `viewer` before public deployment).
     - _Requirements: 17.1, 17.3, 17.4, 17.5_
 
+- [ ] 23. Fill in the remaining placeholder pages (gap found after Phase 9: earlier tasks built the APIs/stores but never the page UIs)
+  - [x] 23.1 Library page
+    - `/library`: list saved balls (color, name — falls back to `config.id` for saves made before naming — weapons, HP) with Delete (confirm); empty state links to Roulette. Export downloads one JSON with Library + Settings; Import validates via `parseImport`, asks for confirmation, then replaces both stores (settings sanitized), or shows an error and changes nothing. Adds `library.removeBall(id)`.
+    - _Requirements: 13.1, 13.6, 13.7, 13.8_
+  - [x] 23.2 Versus picks balls from the Library
+    - Candidates = default balls + every Library ball (name, color, source label); a ball referencing an unknown weapon is shown disabled. Selection order sets the start slot. `placeForDuel` (`utils/duel.ts`) copies the configs into mirrored left/right start slots with the same speed for any pair, and recolors the second ball if both share a color. HP bars, the winner text, and the on-canvas winner label use ball names.
+    - Tests: `tests/duel-utils.spec.ts` (start slots, recolor without mutating input, `stepsForElapsed`).
+    - _Requirements: 11.1, 11.2, 11.4, 11.9_
+  - [ ] 23.3 Login, Register, and Logout UI (forms calling the existing `/api/auth/*`; logout control + signed-in state in the layout; needs PostgreSQL running)
+  - [ ] 23.4 Home page (short intro + quick links to Roulette and Versus)
+
 - [ ] 22. Final checkpoint — all phases complete
   - Ensure all tests pass, ask the user if questions arise.
   - Test run fixed: `vitest.config.ts` now includes `tests/**` in the `app` project (it previously matched no files, so no test ever ran). Fixed a stale layout test (the deployment banner is also `role="alert"`) and made sprite baking tolerate a missing 2D context (happy-dom). `npm test` (Node ≥ 20): 6 files, 28 tests passing. Remaining: manual browser check of roulette, versus FX, settings, and recording.

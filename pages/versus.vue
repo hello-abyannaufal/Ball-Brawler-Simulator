@@ -7,20 +7,55 @@ import { useAudio } from '~/composables/useAudio'
 import { createRecorder, RecordingUnsupportedError, type Recorder } from '~/composables/useRecorder'
 import { useRecordingsStore } from '~/stores/recordings'
 import { useSettingsStore } from '~/stores/settings'
-import { defaultBalls, hpBarFraction } from '~/utils/duel'
+import { useLibraryStore } from '~/stores/library'
+import { weaponRegistry } from '~/engine/weapons/registry'
+import { defaultBalls, hpBarFraction, placeForDuel } from '~/utils/duel'
+import '~/engine/weapons/index' // populate the registry
 
 // Arena configured into a Duel_Config before running (Req 11.4).
 const arena = { width: 360, height: 360 } // 1:1
 const seed = ref(12345)
 
-// Candidate balls (default balls for now; Library/Roulette feed in later).
-const candidates = ref<BallConfig[]>(defaultBalls())
-const selectedIds = ref<string[]>(candidates.value.map((b) => b.id))
+interface Candidate {
+  key: string // unique across sources
+  name: string
+  source: 'default' | 'library'
+  config: BallConfig
+  usable: boolean // false if it references a weapon this build doesn't have
+}
+
+// Candidate balls: the built-in defaults plus everything saved in the Library
+// (e.g. from Roulette) (Req 11.1).
+const library = useLibraryStore()
+const candidates = computed<Candidate[]>(() => {
+  const usable = (c: BallConfig) => c.weapons.every((w) => weaponRegistry.has(w.weaponId))
+  return [
+    ...defaultBalls().map((c) => ({ key: `default:${c.id}`, name: c.id, source: 'default' as const, config: c, usable: true })),
+    ...library.balls.map((b) => ({
+      key: `library:${b.id}`,
+      name: b.name || b.config.id,
+      source: 'library' as const,
+      config: b.config,
+      usable: usable(b.config),
+    })),
+  ]
+})
+// Selection order = start slot (first = left, second = right).
+const selectedIds = ref<string[]>(['default:default-red', 'default:default-blue'])
 
 const selected = computed(() =>
-  candidates.value.filter((b) => selectedIds.value.includes(b.id)),
+  selectedIds.value
+    .map((key) => candidates.value.find((c) => c.key === key))
+    .filter((c): c is Candidate => !!c && c.usable),
 )
 const canStart = computed(() => selected.value.length === 2) // exactly two (Req 11.1, 11.2)
+// Names of the balls in the running duel, in engine order (HP bars, winner).
+const duelNames = ref<string[]>([])
+const winnerName = computed(() => {
+  if (winner.value === undefined || winner.value === null) return null
+  const i = hp.value.findIndex((h) => h.id === winner.value)
+  return duelNames.value[i] ?? `Ball ${winner.value}`
+})
 
 const canvasEl = ref<HTMLCanvasElement | null>(null)
 const running = ref(false)
@@ -66,13 +101,16 @@ function startDuel(record = false): void {
   const config: DuelConfig = {
     engineVersion,
     seed: seed.value,
-    ballConfigs: selected.value,
+    // Same fair start slots for any pair, default or from the Library.
+    ballConfigs: placeForDuel(selected.value.map((c) => c.config), arena),
     arenaConfig: arena,
   }
+  duelNames.value = selected.value.map((c) => c.name)
   duel?.dispose()
   duel = useVersusDuel(canvasEl, config, seed.value, settings.simulationSpeed, {
     showHitboxes: showHitboxes.value,
     reducedMotion: prefersReducedMotion,
+    names: duelNames.value,
   })
   // Mirror the shallowRefs into local reactive refs for the template.
   watchEffect(() => {
@@ -165,14 +203,23 @@ onBeforeUnmount(() => {
         Select exactly two balls:
       </p>
       <ul class="mb-2 space-y-1">
-        <li v-for="b in candidates" :key="b.id">
-          <label class="flex items-center gap-2">
+        <li v-for="b in candidates" :key="b.key">
+          <label class="flex items-center gap-2" :class="{ 'opacity-50': !b.usable }">
             <input
               type="checkbox"
-              :checked="selectedIds.includes(b.id)"
-              @change="toggle(b.id)"
+              :checked="selectedIds.includes(b.key)"
+              :disabled="!b.usable"
+              @change="toggle(b.key)"
             >
-            <span>{{ b.id }}</span>
+            <span
+              class="inline-block h-3 w-3 shrink-0 rounded-full border border-black"
+              :style="{ background: b.config.appearance?.type === 'color' ? b.config.appearance.value : '#c0cbdc' }"
+              aria-hidden="true"
+            />
+            <span>{{ b.name }}</span>
+            <span class="text-xs text-gray-500">
+              {{ !b.usable ? '(unknown weapon)' : b.source === 'library' ? '· Library' : '· Default' }}
+            </span>
           </label>
         </li>
       </ul>
@@ -212,8 +259,8 @@ onBeforeUnmount(() => {
 
     <section v-else class="flex w-full flex-col items-center">
       <div class="mb-2 flex w-full max-w-[480px] justify-center gap-6">
-        <div v-for="h in hp" :key="h.id" class="text-xs">
-          Ball {{ h.id }}
+        <div v-for="(h, i) in hp" :key="h.id" class="text-xs">
+          {{ duelNames[i] ?? `Ball ${h.id}` }}
           <div class="h-2 w-40 bg-red-900">
             <div
               class="h-2 bg-green-500"
@@ -242,7 +289,7 @@ onBeforeUnmount(() => {
         role="status"
         class="mt-2 text-lg font-bold"
       >
-        {{ winner === null ? 'DRAW' : `Winner: Ball ${winner}` }}
+        {{ winner === null ? 'DRAW' : `Winner: ${winnerName}` }}
       </div>
 
       <div class="mt-3 flex gap-2">
