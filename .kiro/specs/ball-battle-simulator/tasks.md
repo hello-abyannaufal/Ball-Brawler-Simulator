@@ -224,15 +224,26 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
 - [x] 15. Checkpoint — Phases 4–5 skills and weapons complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 16. Phase 6 — Versus page, renderer, and lifecycle
-  - [ ] 16.1 Provide default balls and HP-bar clamp helper
-    - Add at least two default balls so Versus runs without login or saved content. Add a pure `hpBarFraction(hp, maxHp)` clamped to `[0, 1]`.
+- [ ] 16. Phase 6 — Retro sprite system, Versus page, renderer, and lifecycle
+  - [ ] 16.0 Implement the retro sprite/asset system (hybrid: procedural + optional PNG)
+    - Create `assets/sprites/manifest.ts`: a typed registry mapping every `spriteId` to its source. Each entry is either `{ kind: 'procedural'; draw(ctx, size) }` (pixel grid drawn in code) or `{ kind: 'image'; src: string }` (PNG under `public/sprites/`). Procedural is the default so the game runs with zero external files; an entry can later be swapped to an image with no logic change.
+    - Create `composables/useSprites.ts` (client-only): preloads/caches sprite canvases at the base pixel grid (entities 32×32, spear 48×12, projectile 8×8, icons 16×16), renders them with `imageSmoothingEnabled = false` at integer scale, and exposes `drawSprite(ctx, spriteId, x, y, scale, angle?)`. Missing/failed images fall back to a visible placeholder sprite, never a crash.
+    - Add a global retro look: register one bitmap pixel font (8px tall) and a 9-slice panel/button helper (tile 8×8) usable across pages.
+    - Keep this layer entirely in the app/client; the engine stays sprite-agnostic.
+    - _Requirements: 11.5, 11.6_
+  - [ ] 16.0b Add optional visual-reference ids to engine data (no logic change)
+    - Add optional, logic-free fields so the renderer can map engine entities to sprites: `spriteId?: string`, `iconId?: string` and `pivot?: { x: number; y: number }` (sprite-pixel rotation point, see assets-plan.md Pivot table) on `WeaponDefinition`, and `iconId?: string` on `SkillDefinition`. These are pure identifiers consumed only by the app layer; the engine ignores them and determinism is unaffected. Set them on the five starter weapons (`sword`,`hammer`,`spear`,`orbiting-blade`,`bow`) and five starter skills.
+    - _Requirements: 11.5_
+  - [ ] 16.1 Provide default balls, ball appearance model, and HP-bar clamp helper
+    - Add at least two default balls so Versus runs without login or saved content. Give `BallConfig` an optional `appearance` field (data only, engine stays pure): `{ type: 'color'; value: string } | { type: 'pattern'; patternId: string } | { type: 'image'; src: string }`, defaulting to a solid color. The renderer draws a ball by clipping a circle (`ctx.arc` + `ctx.clip`) and filling it per `appearance` (solid color, pixel pattern, or user image) — no ball sprite asset is required. Add a pure `hpBarFraction(hp, maxHp)` clamped to `[0, 1]`.
     - _Requirements: 11.3, 11.7_
   - [ ]* 16.2 Write property test for HP-bar clamp
     - **Property 28: HP bar fraction is clamped**
     - **Validates: Requirements 11.7**
-  - [ ] 16.3 Implement the client-only duel composable and renderer
+  - [ ] 16.3 Implement the client-only duel composable and retro renderer
     - Create `composables/useVersusDuel.ts` (client-only): owns the rAF loop advancing the engine by whole steps scaled by simulation speed, draws the World to a 2D canvas context once per frame, updates `hp`/`winner`/`lastEvent` `shallowRef`s at most once per frame, never deep-binds entity state into Vue. `rematch()` re-runs the same seed+config; `dispose()` cancels rAF and drops listeners.
+    - Render in retro pixel style via `useSprites` with `imageSmoothingEnabled = false` and integer scaling: draw a tiled arena floor + wall border, balls via the `appearance` circle-clip fill, weapons via their `spriteId` sprite rotated by the `WeaponEntity` angle around `WeaponDefinition.pivot` (default left-middle). Held weapons are anchored at the ball's surface (`owner.position + facing × owner.radius`), NOT at `WeaponEntity.position`, which the engine keeps at the hitbox center for collision; orbit weapons are anchored at `WeaponEntity.position`, projectiles as the 8×8 projectile sprite, and HP bars with a 9-slice frame + fill. Draw the pixel font for labels.
+    - Add a `showHitboxes` debug overlay (off by default): draw each weapon's logical hitbox outline (`segment`/`circle` from `WeaponDefinition.hitbox`) over the sprite so sprite-vs-hitbox alignment can be verified. IMPORTANT: hitboxes remain geometric data in the engine and are the single source of collision truth; sprites are visual only and are tuned to cover their hitbox. The renderer never derives collision from sprite pixels.
     - _Requirements: 11.5, 11.6, 11.8, 11.10, 11.11_
   - [ ] 16.4 Wire the versus page UI
     - Replace the `/versus` placeholder body: select exactly two balls from Library, Roulette results, or default balls; block start with an error when not exactly two; configure the Arena into a `Duel_Config`; render one HP bar per ball (`hpBarFraction`); show a winner screen within 100 ms of `matchEnded`; rematch control; dispose the engine on unmount.
@@ -254,8 +265,9 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
   - [ ]* 17.4 Write property test for export/import JSON round-trip
     - **Property 29: Library and settings survive export/import and JSON round-trips**
     - **Validates: Requirements 13.6, 13.7, 13.10**
-  - [ ] 17.5 Wire the roulette page
+  - [ ] 17.5 Wire the roulette page with a pixel reel UI
     - Replace the `/roulette` placeholder body: spin with a provided integer seed, or generate and record a seed within 2 s when none provided; show an error identifying the empty registry on empty-registry spin; save a result's ball config including the seed to the Library_Store without login; retain the unsaved result and show an error on save failure.
+    - Present the roulette in retro pixel style: a reel/slot strip tiled from a pixel background, skill/weapon shown via their 16×16 `iconId` sprites, a pixel spin button with idle/pressed frames, and a landing highlight/glow overlay. The reel animation is cosmetic only — the actual draw stays the deterministic seeded `spinRoulette` result (visuals must land on that result). Honor reduced-motion by skipping the spin animation and showing the result immediately.
     - _Requirements: 12.2, 12.6, 12.7, 12.8_
   - [ ]* 17.6 Write unit tests for roulette and library
     - No-seed spin generates and records a seed (12.2); empty-registry rejection message (12.4); save stores ball config with the seed (12.7); save-failure handling (12.8); library holds balls/skills/weapons with ids (13.1); invalid import rejected leaving state unchanged (13.8); corrupt/absent load → empty (13.5); saved Duel shape with current `engineVersion` (13.9).
@@ -297,8 +309,9 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
   - [ ]* 20.4 Write property test for simulation-speed scaling
     - **Property 31: Simulation speed scales step count, not the timestep**
     - **Validates: Requirements 15.7**
-  - [ ] 20.5 Implement reduced-motion, keyboard a11y, and per-source hit feedback
+  - [ ] 20.5 Implement reduced-motion, keyboard a11y, and per-source pixel hit feedback
     - Honor `prefers-reduced-motion: reduce` by zeroing decorative/transition UI animation (0 ms) while keeping the simulation's fixed-timestep rate and outcome unchanged. Ensure menu controls are fully keyboard operable (Tab/Shift+Tab, Enter/Space) with exactly one visible focus indicator at a time (reuse the Phase 1 menu). On each registered hit present a 50–500 ms hit-flash whose appearance differs per `contact`/`weapon`/`projectile` source so the source is distinguishable by sight.
+    - Render the hit-flash as a 32×32 pixel sprite with three visually distinct variants (one per `contact`/`weapon`/`projectile` source) drawn at the hit location via `useSprites`, consistent with the retro style. Distinction must hold by shape/pattern, not color alone, so it survives reduced-motion and color-blind viewing.
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
   - [ ] 20.6 Wire the settings page
     - Replace the `/settings` placeholder body with controls bound to the settings store for resolution, aspect ratio, sound, and simulation speed.
@@ -323,6 +336,16 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
 - Each property sub-task references exactly one of the 34 correctness properties and the requirement clauses it validates.
 - Checkpoints ensure incremental validation at phase boundaries.
 - Database, recording I/O, and UI/accessibility behavior use example/integration/smoke tests rather than property iterations, per the design's Testing Strategy.
+
+### Retro / pixel-art direction (project-wide)
+
+- The whole app uses a retro, pixel-art look. All canvas rendering uses `imageSmoothingEnabled = false` and integer scaling to keep pixels crisp.
+- Base pixel grids: entities 32×32 (spear 48×12), projectile 8×8, UI/skill/weapon icons 16×16, bitmap font 8px tall, 9-slice panels/buttons tiled at 8×8.
+- Sprites are supplied via a hybrid system: procedural pixel grids by default (zero external files) with the option to swap any entry to a PNG under `public/sprites/` with no logic change.
+- Balls are not sprites: a ball is a circle-clipped fill driven by `BallConfig.appearance` (solid color, pixel pattern, or user image), so ball color/skin is fully customizable.
+- Hitboxes vs sprites are separate layers. Hitboxes are geometric data in the engine (`segment`/`circle`) and are the single source of collision truth; sprites are visual only and are tuned to cover their hitbox. The engine never reads sprite pixels, preserving determinism (Req 5.1, 5.3, 5.6). A `showHitboxes` debug overlay verifies alignment.
+- Engine data gains only logic-free visual-reference fields (`spriteId`/`iconId`/`pivot`); they do not affect simulation or determinism.
+- The full asset catalog, sizes, and generation prompts live in `.kiro/specs/ball-battle-simulator/assets-plan.md`.
 
 ## Task Dependency Graph
 
