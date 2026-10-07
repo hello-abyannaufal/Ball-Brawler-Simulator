@@ -71,26 +71,26 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
 - [x] 5. Checkpoint — Phase 2 complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 6. Phase 3 — Engine RNG and seed validation
-  - [ ] 6.1 Implement mulberry32 RNG with seed validation
+- [x] 6. Phase 3 — Engine RNG and seed validation
+  - [x] 6.1 Implement mulberry32 RNG with seed validation
     - Create `engine/rng.ts`: `SEED_MIN`/`SEED_MAX`, `createRng(seed)` throwing `InvalidSeedError` for non-integer or out-of-range `[0, 4294967295]` seeds before any use; `next()`, `nextInt(n)`, readonly `state`. No `Math.random`, no wall-clock.
     - _Requirements: 5.2, 5.9_
   - [ ]* 6.2 Write property test for invalid-seed rejection
     - **Property 3: Invalid seeds are rejected before any step**
     - **Validates: Requirements 5.2, 5.9**
 
-- [ ] 7. Phase 3 — World, entities, and config types
-  - [ ] 7.1 Define entity and config types and the World container
+- [x] 7. Phase 3 — World, entities, and config types
+  - [x] 7.1 Define entity and config types and the World container
     - Create `engine/entities.ts` (`Vec2`, `BaseEntity`, `Ball`, `Projectile`, `WeaponEntity`, `Entity`, `EntityId`, `EntityKind`) and `engine/world.ts` (`World` with stable insertion-ordered `entities`, `rng`, `arena`, `tick`, `add`, `ballById`, `aliveBalls`).
     - Create `engine/config.ts`: `DuelConfig`, `BallConfig`, `ArenaConfig`, `SkillRef`, `WeaponRef`.
     - _Requirements: 5.5_
 
-- [ ] 8. Phase 3 — Damage gateway and Damage_Source union
-  - [ ] 8.1 Implement events and the Damage_Source union
+- [x] 8. Phase 3 — Damage gateway and Damage_Source union
+  - [x] 8.1 Implement events and the Damage_Source union
     - Create `engine/events.ts` (`EngineEvent`: `damage`, `skillTriggered`, `weaponClash`, `ballDied`, `matchEnded`).
     - Create `engine/damage.ts` types: `DamageSourceTag` with active members `contact`/`weapon`/`projectile` and reserved `area`/`dot`/`environment`/`beam`/`summon`/`reflect`; `DamageSource`, `DamageFlags`, `ApplyDamageInput`, `ApplyDamageOutcome`.
     - _Requirements: 6.4, 6.5_
-  - [ ] 8.2 Implement the applyDamage gateway
+  - [x] 8.2 Implement the applyDamage gateway
     - Create `applyDamage(world, input)` as the only HP reducer: amount ≤ 0 → no change, no event, `noop`; target not a living ball → `target-not-found`; source tag outside the union → `invalid-source`; empty `attackerId` allowed; `summonOwnerId` credits owner; `isReflected` applies once and triggers no further reflection; positive application emits exactly one `damage` event; HP ≤ 0 clamps to 0, marks dead, emits exactly one `ballDied`.
     - _Requirements: 6.1, 6.2, 6.3, 6.6, 6.7, 6.8, 6.9, 6.10, 6.11_
   - [ ]* 8.3 Write property test for valid damage application
