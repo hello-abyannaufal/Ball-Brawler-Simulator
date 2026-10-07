@@ -1,0 +1,44 @@
+{
+  "name": "ball-battle-simulator",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18.12.0"
+  },
+  "scripts": {
+    "dev": "nuxt dev",
+    "build": "nuxt build",
+    "preview": "nuxt preview",
+    "postinstall": "nuxt prepare",
+    "typecheck": "nuxt typecheck",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx server/db/migrate.ts"
+  },
+  "dependencies": {
+    "@pinia/nuxt": "^0.5.5",
+    "drizzle-orm": "^0.45.3",
+    "nuxt": "^3.14.0",
+    "nuxt-auth-utils": "^0.5.30",
+    "pinia": "^2.2.6",
+    "pinia-plugin-persistedstate": "^3.2.3",
+    "postgres": "^3.4.9",
+    "vue": "^3.5.12",
+    "vue-router": "^4.4.5"
+  },
+  "devDependencies": {
+    "@nuxt/eslint": "^0.6.1",
+    "@nuxt/test-utils": "^3.14.4",
+    "@nuxtjs/tailwindcss": "^6.12.2",
+    "@types/node": "^22.9.0",
+    "@vue/test-utils": "^2.4.6",
+    "drizzle-kit": "^0.31.11",
+    "eslint": "^9.14.0",
+    "fast-check": "^4.10.2",
+    "happy-dom": "^15.11.0",
+    "typescript": "^5.6.3",
+    "vitest": "^3.2.0",
+    "vue-tsc": "^2.1.10"
+  }
+}
