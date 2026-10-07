@@ -31,9 +31,12 @@ function makeCanvas(w: number, h: number): HTMLCanvasElement {
 
 function bakeProcedural(id: string, src: SpriteSource): Baked {
   const canvas = makeCanvas(src.width, src.height)
-  const ctx = canvas.getContext('2d')!
-  ctx.imageSmoothingEnabled = false
-  if (src.kind === 'procedural') src.draw(ctx, src.width, src.height)
+  // No 2D context (e.g. happy-dom in tests): keep the blank canvas.
+  const ctx = canvas.getContext('2d')
+  if (ctx) {
+    ctx.imageSmoothingEnabled = false
+    if (src.kind === 'procedural') src.draw(ctx, src.width, src.height)
+  }
   const baked = { canvas, width: src.width, height: src.height }
   cache.set(id, baked)
   return baked
@@ -44,9 +47,11 @@ function bakeImage(id: string, src: Extract<SpriteSource, { kind: 'image' }>): P
     const img = new Image()
     img.onload = () => {
       const canvas = makeCanvas(src.width, src.height)
-      const ctx = canvas.getContext('2d')!
-      ctx.imageSmoothingEnabled = false
-      ctx.drawImage(img, 0, 0, src.width, src.height)
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        ctx.imageSmoothingEnabled = false
+        ctx.drawImage(img, 0, 0, src.width, src.height)
+      }
       cache.set(id, { canvas, width: src.width, height: src.height })
       resolve()
     }

@@ -17,7 +17,7 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - Create `vitest.config.ts` with two project environments: `node` for `engine/**` (no DOM) and `happy-dom` for app/component tests. Wire `npm run test` to `vitest run`.
     - _Requirements: 5.1, 5.3_
 
-- [ ] 2. Phase 2 — Database schema, migrations, and local DB setup
+- [x] 2. Phase 2 — Database schema, migrations, and local DB setup
   - [x] 2.1 Define Drizzle schema and client
     - Create `server/db/schema.ts`: `role` pgEnum (`superuser` | `viewer`), `users` table (`id` uuid PK, `email` text not null unique, `password_hash` text not null, `role` enum not null, `created_at` timestamptz not null default now). Add a commented example content table showing the `created_by` not-null FK → `users.id` pattern.
     - Create `server/db/client.ts`: `postgres` driver + Drizzle client reading connection from env.
@@ -144,9 +144,10 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
   - [ ]* 11.2 Write property test for fixed step order
     - **Property 2: Fixed step order**
     - **Validates: Requirements 5.7, 7.9**
-  - [ ]* 11.3 Write property test for determinism
+  - [x]* 11.3 Write property test for determinism
     - **Property 1: Determinism of seed and config**
     - **Validates: Requirements 5.5, 5.6, 11.10**
+    - `engine/determinism.test.ts`: 100 fast-check runs (random seed, weapons, radii, HP, velocity), each run twice and compared on winner, tick, final entity state, per-step entity order, and full event log; plus a fixed duel that reaches `matchEnded`. Mutation-checked: swapping the clash RNG for `Math.random()` makes it fail.
   - [ ]* 11.4 Write property test for damage-free ball collisions and weapon-hit knockback
     - **Property 14: Ball collisions deal no damage; weapon hits knock back along the center line**
     - **Validates: Requirements 8.5, 8.6**
@@ -299,60 +300,64 @@ Each test sub-task marked `*` is optional and may be skipped for a faster MVP. C
     - No-seed spin generates and records a seed (12.2); empty-registry rejection message (12.4); save stores ball config with the seed (12.7); save-failure handling (12.8); library holds balls/skills/weapons with ids (13.1); invalid import rejected leaving state unchanged (13.8); corrupt/absent load → empty (13.5); saved Duel shape with current `engineVersion` (13.9).
     - _Requirements: 12.2, 12.4, 12.7, 12.8, 13.1, 13.5, 13.8, 13.9_
 
-- [ ] 18. Checkpoint — Phases 6–7 versus, roulette, library complete
+- [x] 18. Checkpoint — Phases 6–7 versus, roulette, library complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 19. Phase 8 — Recording and audio
-  - [ ] 19.1 Implement mime selection helper
+- [x] 19. Phase 8 — Recording and audio
+  - [x] 19.1 Implement mime selection helper
     - Create `composables/useRecorder.ts` with `MIME_FALLBACKS` (WebM-first ordered list) and `pickMimeType()` returning the first candidate `MediaRecorder.isTypeSupported` accepts, or null when none match.
     - _Requirements: 14.2, 14.3_
   - [ ]* 19.2 Write property test for mime selection
     - **Property 34: Recording mime selection picks the first supported candidate**
     - **Validates: Requirements 14.2**
-  - [ ] 19.3 Implement the recorder and Web Audio layer
+  - [x] 19.3 Implement the recorder and Web Audio layer
     - In `composables/useRecorder.ts` (client-only): capture the canvas via `canvas.captureStream(60)`, encode with `MediaRecorder` using the picked mime, abort with an "unsupported" error and no partial save when none match, render at the configured resolution independent of display size. Create `composables/useAudio.ts` (client-only): produce hit/skill/clash/win sounds via Web Audio, silent when the sound setting is disabled, and mix the audio track into the recorded stream so the file has video + audio. Auto-record starts the duel, records, stops within 2 s after the winner, and saves.
+    - Fix: auto-record waits for the duel canvas to mount (`nextTick`) before capturing — previously the first Auto record silently never started. The duel view shows a "● Recording…" indicator and recording errors. The canvas renders at the Settings resolution (20.1), so recordings use it (15.8).
     - _Requirements: 14.1, 14.4, 14.5, 14.6, 14.11, 15.6, 15.8_
-  - [ ] 19.4 Implement recordings store and IndexedDB blob storage
+  - [x] 19.4 Implement recordings store and IndexedDB blob storage
     - Create `stores/recordings.ts` (metadata only) and an IndexedDB helper keyed by `RecordingMeta.id`: on completion store the blob in IndexedDB and metadata in the store; on IndexedDB failure surface an error and create no metadata entry.
+    - Fix: `removeRecording` deletes the IndexedDB blob first, then the metadata (kept, with an error shown, if the blob delete fails), so deleted recordings no longer leave orphaned video data.
     - _Requirements: 14.7, 14.8_
-  - [ ] 19.5 Wire the recordings page
+  - [x] 19.5 Wire the recordings page
     - Replace the `/recordings` placeholder body: list all saved recordings; on selection play back the recording and allow download.
     - _Requirements: 14.9, 14.10_
   - [ ]* 19.6 Write smoke tests for recording path
     - 1–2 browser-capable examples of capture/encode/mix/auto-record/IndexedDB and recordings list/playback/download (14.1, 14.4–14.11).
     - _Requirements: 14.1, 14.4, 14.5, 14.6, 14.7, 14.9, 14.10, 14.11_
 
-- [ ] 20. Phase 9 — Settings, accessibility, and polish
-  - [ ] 20.1 Implement the settings store with sanitizing load
+- [x] 20. Phase 9 — Settings, accessibility, and polish
+  - [x] 20.1 Implement the settings store with sanitizing load
     - Create `stores/settings.ts`: resolution (width/height integers 1–7680), aspect ratio (default `9:16`), sound (default enabled), simulation speed (0.1–10.0, default 1.0), default resolution 1080×1920; persist within 1 s of change; on load replace absent/out-of-bound values with defaults without a blocking error.
     - _Requirements: 15.1, 15.2, 15.3, 15.4, 15.5_
   - [ ]* 20.2 Write property test for settings sanitization
     - **Property 30: Settings load sanitizes every field to its bounds**
     - **Validates: Requirements 15.5**
-  - [ ] 20.3 Implement simulation-speed step-count scaling
+  - [x] 20.3 Implement simulation-speed step-count scaling
     - Add a pure `stepsForElapsed(realSeconds, speed)` = whole steps `realSeconds × 60 × speed`, keeping each step's timestep exactly 1/60 s; use it to drive the versus rAF loop.
     - _Requirements: 15.7_
   - [ ]* 20.4 Write property test for simulation-speed scaling
     - **Property 31: Simulation speed scales step count, not the timestep**
     - **Validates: Requirements 15.7**
-  - [ ] 20.5 Implement reduced-motion, keyboard a11y, and per-source pixel hit feedback
+  - [x] 20.5 Implement reduced-motion, keyboard a11y, and per-source pixel hit feedback
     - Honor `prefers-reduced-motion: reduce` by zeroing decorative/transition UI animation (0 ms) while keeping the simulation's fixed-timestep rate and outcome unchanged. Ensure menu controls are fully keyboard operable (Tab/Shift+Tab, Enter/Space) with exactly one visible focus indicator at a time (reuse the Phase 1 menu). On each registered hit present a 50–500 ms hit-flash whose appearance differs per `weapon`/`projectile` source so the source is distinguishable by sight.
     - Render the hit-flash as a 32×32 pixel sprite with two visually distinct variants (one per `weapon`/`projectile` source) drawn at the hit location via `useSprites`, consistent with the retro style. Distinction must hold by shape/pattern, not color alone, so it survives reduced-motion and color-blind viewing.
+    - Done as: global CSS zeroes animation/transition under reduced motion and gives one `:focus-visible` outline; the duel skips hit-stop and particles under reduced motion (simulation rate/outcome unchanged) but still shows hit-flashes. Hit-flash = existing `fx:hit-weapon` (slash) / `fx:hit-projectile` (cross burst) 32×32 sprites at the impact point for 200 ms.
     - _Requirements: 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
-  - [ ] 20.6 Wire the settings page
+  - [x] 20.6 Wire the settings page
     - Replace the `/settings` placeholder body with controls bound to the settings store for resolution, aspect ratio, sound, and simulation speed.
     - _Requirements: 15.1, 15.6, 15.8_
   - [ ]* 20.7 Write unit tests for settings and accessibility
     - Settings defaults (15.1, 15.2); sound-disabled silence (15.6); reduced-motion zeroes UI animation while simulation outcome is unchanged (16.1, 16.2); single visible focus indicator and keyboard operability (16.3, 16.4); hit-flash duration and per-source distinction (16.5, 16.6).
     - _Requirements: 15.1, 15.2, 15.6, 16.1, 16.2, 16.3, 16.4, 16.5, 16.6_
 
-- [ ] 21. Phase 9 — README architecture, extension, determinism, and roles sections
-  - [ ] 21.1 Write remaining README sections
+- [x] 21. Phase 9 — README architecture, extension, determinism, and roles sections
+  - [x] 21.1 Write remaining README sections
     - Add the architecture section (each major component, responsibilities, data flow); the extension section with separate step-by-step procedures for adding a Skill, a Weapon, and a new Damage_Source (files to create/modify and steps); the determinism section (how determinism is achieved, how `engineVersion` is defined/incremented/used); and the roles section (how roles evolve, and that the default role must change to `viewer` before public deployment).
     - _Requirements: 17.1, 17.3, 17.4, 17.5_
 
 - [ ] 22. Final checkpoint — all phases complete
   - Ensure all tests pass, ask the user if questions arise.
+  - Test run fixed: `vitest.config.ts` now includes `tests/**` in the `app` project (it previously matched no files, so no test ever ran). Fixed a stale layout test (the deployment banner is also `role="alert"`) and made sprite baking tolerate a missing 2D context (happy-dom). `npm test` (Node ≥ 20): 6 files, 28 tests passing. Remaining: manual browser check of roulette, versus FX, settings, and recording.
 
 ## Notes
 

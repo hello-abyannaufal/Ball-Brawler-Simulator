@@ -23,7 +23,7 @@ export default defineConfig(async () => ({
               domEnvironment: 'happy-dom',
             },
           },
-          include: ['test/app/**/*.{test,spec}.ts', 'app/**/*.{test,spec}.ts'],
+          include: ['tests/**/*.{test,spec}.ts', 'test/app/**/*.{test,spec}.ts', 'app/**/*.{test,spec}.ts'],
           exclude: ['engine/**', 'test/engine/**', 'node_modules/**'],
         },
       }),

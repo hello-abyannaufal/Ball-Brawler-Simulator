@@ -14,6 +14,8 @@ describe('default layout', () => {
 
   it('hides the persistence notification by default', async () => {
     const wrapper = await mountSuspended(DefaultLayout)
-    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    // The deployment-safety banner is also role="alert" (Req 17.6), so target
+    // the persistence notification by its dismiss control.
+    expect(wrapper.find('[aria-label="Dismiss notification"]').exists()).toBe(false)
   })
 })
