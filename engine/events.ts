@@ -8,6 +8,7 @@ export type EngineEvent =
       attackerId: EntityId | ''
       targetId: EntityId
       amount: number
+      style?: 'critical' // presentation hint (see DamageFlags.style)
     }
   | {
       type: 'weaponClash'
@@ -16,4 +17,10 @@ export type EngineEvent =
       outcome: 'bounce' | 'parry' | 'disarm'
     }
   | { type: 'ballDied'; ballId: EntityId }
+  /** A riposting blade sent a projectile back at its shooter from (x, y). */
+  | { type: 'projectileReflected'; projectileId: EntityId; weaponId: EntityId; x: number; y: number }
+  /** An arrow was swatted out of the air by a weapon at (x, y). */
+  | { type: 'projectileBlocked'; projectileId: EntityId; weaponId: EntityId; x: number; y: number }
+  /** A slammed ball hit a wall at (x, y); a `damage` event follows. */
+  | { type: 'wallSlam'; ballId: EntityId; attackerId: EntityId; x: number; y: number }
   | { type: 'matchEnded'; winner: EntityId | null }

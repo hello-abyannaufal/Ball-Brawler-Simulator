@@ -39,7 +39,7 @@ The non-negotiable architecture rules from the product brief govern every phase:
 - **Weapon_Registry**: The central registry mapping weapon ids to Weapon definitions.
 - **Weapon_Clash**: An interaction between two Weapon hitboxes resolved by weapon weight (bounce, parry, or disarm), producing no direct damage.
 - **Knockback**: A small velocity impulse applied to a Ball on every hit.
-- **Engine_Event**: A structured event emitted by the Engine (`damage`, `weaponClash`, `ballDied`, `matchEnded`; `skillTriggered` is deferred with Requirement 9) consumed by the UI.
+- **Engine_Event**: A structured event emitted by the Engine (`damage`, `weaponClash`, `wallSlam`, `projectileBlocked`, `ballDied`, `matchEnded`; `skillTriggered` is deferred with Requirement 9) consumed by the UI.
 - **engineVersion**: A version identifier for the Engine, stored with every saved duel so results can be interpreted against the Engine that produced them.
 - **Duel_Config**: The storable description of a duel: `{ engineVersion, seed, ballConfigs, arenaConfig }`.
 - **Roulette**: The feature that draws skills and weapons for a ball from the registries using the seeded RNG, producing reproducible results from a seed.
@@ -221,7 +221,7 @@ The non-negotiable architecture rules from the product brief govern every phase:
 8. WHEN two Weapon hitboxes overlap, THE Engine SHALL resolve a Weapon_Clash whose outcome is exactly one of bounce, parry, or disarm determined by the two Weapons' `weight` values, and SHALL apply no direct damage from the clash.
 9. WHEN a Weapon_Clash resolves, THE Engine SHALL emit exactly one `weaponClash` Engine_Event.
 10. WHERE a Weapon has projectile settings, WHEN the Weapon fires, THE Engine SHALL spawn one projectile Entity, and WHEN that projectile overlaps an opposing Ball THE Engine SHALL apply damage through `applyDamage` with Damage_Source `projectile` credited to the owner Ball.
-11. THE Weapon_Registry SHALL include exactly these five starter weapons: Sword (`held`), Hammer (`held`, heaviest `weight` among starter weapons, cannot be parried), Spear (`held`, greatest `length` among starter weapons), Orbiting blade (`orbit`), and Bow (projectile settings present).
+11. THE Weapon_Registry SHALL include exactly these five starter weapons: Sword (`held`), Hammer (`held`, heaviest `weight` among starter weapons, cannot be parried), Spear (`held`, greatest `length` among starter weapons), Shuriken (summoner: circling shurikens thrown in a fan; formerly Orbiting blade), and Bow (projectile settings present).
 12. WHERE a clashing Weapon is the Hammer, WHEN the Weapon_Clash resolves, THE Engine SHALL NOT produce a parry outcome for the Hammer.
 
 ### Requirement 11: Versus Page and Rendering (Phase 6)

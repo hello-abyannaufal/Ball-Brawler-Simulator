@@ -69,6 +69,26 @@ export function weaponHitsBall(weapon: WeaponEntity, ball: Ball): boolean {
   return distSq <= sum * sum
 }
 
+/**
+ * Where along a segment blade a ball's center projects: 0 = grip (ball
+ * surface), 1 = tip. Circles have no length and return 1.
+ */
+export function bladeHitFraction(w: WeaponEntity, ball: Ball): number {
+  if (w.hitbox.shape !== 'segment') return 1
+  const ux = Math.cos(w.angle)
+  const uy = Math.sin(w.angle)
+  const half = w.hitbox.length / 2
+  const along = (ball.position.x - w.position.x) * ux + (ball.position.y - w.position.y) * uy
+  return Math.max(0, Math.min(1, (along + half) / w.hitbox.length))
+}
+
+/** True if a weapon's hitbox touches a circle (e.g. a projectile). */
+export function weaponTouchesCircle(w: WeaponEntity, x: number, y: number, r: number): boolean {
+  const { distSq, pad } = distToHitbox(w, x, y)
+  const sum = pad + r
+  return distSq <= sum * sum
+}
+
 /** True if two weapon hitboxes (segment/circle, any mix) overlap. */
 export function weaponsOverlap(a: WeaponEntity, b: WeaponEntity): boolean {
   const ha = a.hitbox
@@ -87,11 +107,16 @@ export function weaponsOverlap(a: WeaponEntity, b: WeaponEntity): boolean {
 
 export type ClashOutcome = 'bounce' | 'parry' | 'disarm'
 
+/** Cap on the disarm chance, however lopsided the weights: the heavier weapon
+ *  is still favored, but a much lighter one isn't near-certain to lose. */
+export const MAX_DISARM_CHANCE = 0.6
+
 /**
  * Resolve a weapon clash to exactly one outcome, weighted by the two weapons'
  * `weight` values, using the deterministic RNG (Req 10.8, 10.12).
  *
- * The heavier weapon is favored: it tends to disarm the lighter one, the
+ * The heavier weapon is favored (disarm chance = its weight share, capped at
+ * MAX_DISARM_CHANCE): it tends to disarm the lighter one, the
  * lighter one tends to be bounced, and a parry occurs on a near-even match.
  * A weapon flagged `cannotBeParried` (Hammer) never yields a `parry`.
  */
@@ -116,8 +141,9 @@ export function resolveClash(
     return 'parry'
   }
 
-  // Otherwise, the heavier weapon's dominance decides disarm vs bounce.
-  return roll < heavierShare ? 'disarm' : 'bounce'
+  // Otherwise, the heavier weapon's dominance decides disarm vs bounce,
+  // capped so weight alone can't decide every exchange.
+  return roll < Math.min(heavierShare, MAX_DISARM_CHANCE) ? 'disarm' : 'bounce'
 }
 
 /** Unit direction from `from` to `to`, or +x if coincident (deterministic). */

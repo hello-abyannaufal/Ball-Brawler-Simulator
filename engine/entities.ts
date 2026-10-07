@@ -24,6 +24,8 @@ export interface Ball extends BaseEntity {
   hp: number
   maxHp: number
   cruiseSpeed: number // speed the ball eases back to after knockback
+  /** Pending wall-slam from a heavy hit (e.g. Hammer); null when none. */
+  slam: { attackerId: EntityId; damage: number; steps: number } | null
   weapons: WeaponInstance[]
   statusEffects: StatusEffect[]
 }
@@ -33,6 +35,11 @@ export interface Projectile extends BaseEntity {
   radius: number
   damage: number
   ownerId: EntityId // credited attacker
+  blockable: boolean // can be swatted out of the air by an opposing weapon
+  weaponId: string // definition id of the weapon that made it (renderer picks the sprite)
+  orbiting: boolean // summoned and circling its owner, not thrown yet
+  orbitSlot: number // fixed ring slot while circling (0..maxStack-1); -1 otherwise
+  bounceSteps: number // > 0: reflects off walls instead of leaving the arena; counts down
 }
 
 export interface WeaponEntity extends BaseEntity {
@@ -42,6 +49,7 @@ export interface WeaponEntity extends BaseEntity {
   angle: number // orbit/orientation
   angularSpeed: number // runtime spin speed; starts from def, flips on clash
   stunSteps: number // >0 after being disarmed: no damage until it reaches 0
+  riposteSteps: number // >0 while a riposte (boosted next hit) is ready
   hitbox: Hitbox // resolved world-space hitbox this step
 }
 

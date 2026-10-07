@@ -120,7 +120,7 @@ Weapon  →  Trait  →  Ability  →  (nama + Save)
 
 | Roda | Isi | Status |
 |---|---|---|
-| Weapon | Senjata (sword, spear, hammer, bow, orbiting blade, …) | ✅ ada |
+| Weapon | Senjata (sword, spear, hammer, bow, shuriken, …) | ✅ ada |
 | Trait | Efek **pasif** (mis. vampiric, regen, spike) | ⏳ belum ada sistemnya |
 | Ability | Skill **aktif** dengan cooldown (mis. dash, invisibility) | ⏳ belum ada sistemnya |
 

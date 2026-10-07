@@ -2,6 +2,7 @@
 import { ref, computed, watch, watchEffect, nextTick, onBeforeUnmount } from 'vue'
 import type { BallConfig, DuelConfig } from '~/engine/config'
 import { engineVersion } from '~/engine/engine'
+import { SEED_MAX } from '~/engine/rng'
 import { useVersusDuel, type VersusDuel } from '~/composables/useVersusDuel'
 import { useAudio } from '~/composables/useAudio'
 import { createRecorder, RecordingUnsupportedError, type Recorder } from '~/composables/useRecorder'
@@ -14,7 +15,8 @@ import '~/engine/weapons/index' // populate the registry
 
 // Arena configured into a Duel_Config before running (Req 11.4).
 const arena = { width: 360, height: 360 } // 1:1
-const seed = ref(12345)
+// A fresh seed per Start; Rematch reuses it, so the duel replays identically.
+const seed = ref(0)
 
 interface Candidate {
   key: string // unique across sources
@@ -97,12 +99,13 @@ function toggle(id: string): void {
 
 function startDuel(record = false): void {
   if (!canStart.value) return
+  seed.value = Math.floor(Math.random() * (SEED_MAX + 1)) // UI-side randomness; the engine stays seeded
   recError.value = ''
   const config: DuelConfig = {
     engineVersion,
     seed: seed.value,
-    // Same fair start slots for any pair, default or from the Library.
-    ballConfigs: placeForDuel(selected.value.map((c) => c.config), arena),
+    // Random, well-separated starts derived from the seed (any pair, default or Library).
+    ballConfigs: placeForDuel(selected.value.map((c) => c.config), arena, seed.value),
     arenaConfig: arena,
   }
   duelNames.value = selected.value.map((c) => c.name)
@@ -123,7 +126,7 @@ function startDuel(record = false): void {
     (e) => {
       if (!e) return
       if (e.type === 'damage') audio.play('hit')
-      else if (e.type === 'weaponClash') audio.play('clash')
+      else if (e.type === 'weaponClash' || e.type === 'projectileBlocked' || e.type === 'projectileReflected') audio.play('clash')
       else if (e.type === 'matchEnded') audio.play('win')
     },
   )

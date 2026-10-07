@@ -7,6 +7,7 @@ import { useSprites } from '~/composables/useSprites'
 import { usePixelFont } from '~/composables/usePixelFont'
 import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
 import '~/engine/weapons/index'
+import { weaponRegistry } from '~/engine/weapons/registry'
 
 export interface HpView {
   id: EntityId
@@ -58,6 +59,8 @@ const SPARK_LIFE = 0.25 // seconds
 const SPARK_DRAG = 9
 const CLASH_FLASH = 0.08 // seconds the contact flash stays visible
 const CLASH_HIT_STOP = 0.05
+const RIPOSTE_GLOW = '#fee761' // inner gold ring on a blade with a riposte ready
+const RIPOSTE_GLOW_OUTER = '#f77622' // outer orange ring
 
 /** Per-source hit-flash (Req 16.5, 16.6): a 32×32 pixel sprite at the impact,
  *  shaped differently per source (weapon = slash, projectile = cross burst). */
@@ -87,6 +90,7 @@ interface HitFlash {
   y: number
   life: number
   spriteId: string
+  scale: number // 2 for critical hits
 }
 
 export interface VersusOptions {
@@ -112,7 +116,7 @@ export function useVersusDuel(
   opts?: VersusOptions,
 ): VersusDuel {
   const reduced = !!opts?.reducedMotion
-  const { preloadAll, drawSprite } = useSprites()
+  const { preloadAll, drawSprite, drawSpriteSilhouette } = useSprites()
   const { preloadFont, drawText } = usePixelFont()
 
   const view: VersusView = {
@@ -129,6 +133,8 @@ export function useVersusDuel(
   let particles: Particle[] = []
   let flashes: Flash[] = []
   let hitFlashes: HitFlash[] = []
+  // Set by a `wallSlam` event; the damage event that follows uses its point.
+  let pendingSlam: { ballId: EntityId; x: number; y: number } | null = null
   // Entity state before the latest step, for render interpolation.
   let prev = new Map<EntityId, { x: number; y: number; angle: number }>()
 
@@ -138,13 +144,28 @@ export function useVersusDuel(
       config: duel,
       onEvent: (e) => {
         view.lastEvent.value = e
+        if (e.type === 'wallSlam') {
+          pendingSlam = { ballId: e.ballId, x: e.x, y: e.y }
+          return
+        }
         if (e.type === 'damage' && e.amount > 0) {
+          const slam = pendingSlam?.ballId === e.targetId ? pendingSlam : null
+          pendingSlam = null
           const sprite = HIT_FLASH_SPRITE[e.source.tag as keyof typeof HIT_FLASH_SPRITE]
-          const at = impactPoint(e.targetId, e.attackerId)
-          if (sprite && at) hitFlashes.push({ ...at, life: HIT_FLASH, spriteId: sprite })
+          const at = slam ?? impactPoint(e.targetId, e.attackerId)
+          const crit = e.style === 'critical'
+          if (sprite && at) hitFlashes.push({ ...at, life: HIT_FLASH, spriteId: sprite, scale: crit ? 2 : 1 })
           if (reduced) return // decorative motion off; flash above still shows
-          hitStop = HIT_STOP
-          spawnBlood(e.targetId, e.attackerId, e.amount)
+          // Slams and criticals (riposte, spear tip) land harder.
+          hitStop = slam || crit ? HIT_STOP * 1.5 : HIT_STOP
+          spawnBlood(e.targetId, e.attackerId, crit ? e.amount * 2 : e.amount, slam ?? undefined)
+        } else if (e.type === 'projectileBlocked') {
+          if (reduced) return
+          spawnSparksAt(e.x, e.y, SPARK_COUNT.parry)
+        } else if (e.type === 'projectileReflected') {
+          if (reduced) return
+          hitStop = Math.max(hitStop, CLASH_HIT_STOP)
+          spawnSparksAt(e.x, e.y, SPARK_COUNT.disarm)
         } else if (e.type === 'weaponClash') {
           if (reduced) return
           hitStop = Math.max(hitStop, CLASH_HIT_STOP)
@@ -188,19 +209,33 @@ export function useVersusDuel(
     }
   }
 
-  function spawnBlood(targetId: EntityId, attackerId: EntityId | '', amount: number): void {
+  /** `from`: a wall-slam contact point — blood then sprays off the wall. */
+  function spawnBlood(
+    targetId: EntityId,
+    attackerId: EntityId | '',
+    amount: number,
+    from?: { x: number; y: number },
+  ): void {
     const target = engine?.world.ballById(targetId)
     if (!target) return
     const attacker = attackerId === '' ? undefined : engine!.world.ballById(attackerId)
     let dir = 0
     let spread = Math.PI * 2
-    if (attacker) {
+    let ix = target.position.x
+    let iy = target.position.y
+    if (from) {
+      // Spray back from the wall, through the ball.
+      dir = Math.atan2(target.position.y - from.y, target.position.x - from.x)
+      spread = Math.PI * 0.8
+      ix = from.x
+      iy = from.y
+    } else if (attacker) {
       dir = Math.atan2(target.position.y - attacker.position.y, target.position.x - attacker.position.x)
       spread = Math.PI * 0.6
+      // Impact point: target surface on the attacker's side.
+      ix = target.position.x - Math.cos(dir) * target.radius
+      iy = target.position.y - Math.sin(dir) * target.radius
     }
-    // Impact point: target surface on the attacker's side.
-    const ix = target.position.x - Math.cos(dir) * target.radius * (attacker ? 1 : 0)
-    const iy = target.position.y - Math.sin(dir) * target.radius * (attacker ? 1 : 0)
     const count = Math.min(BLOOD_MAX, Math.max(BLOOD_MIN, Math.round(amount * BLOOD_PER_DAMAGE)))
     for (let i = 0; i < count; i++) {
       const a = dir + (Math.random() - 0.5) * spread
@@ -239,10 +274,13 @@ export function useVersusDuel(
     // Contact ≈ midpoint of each blade's point closest to the other.
     const pa = closestOnWeapon(a, b.position.x, b.position.y)
     const pb = closestOnWeapon(b, pa.x, pa.y)
-    const cx = (pa.x + pb.x) / 2
-    const cy = (pa.y + pb.y) / 2
+    spawnSparksAt((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, SPARK_COUNT[outcome])
+  }
+
+  /** Radial spark burst + white flash at a point (clashes, swatted arrows). */
+  function spawnSparksAt(cx: number, cy: number, count: number): void {
     flashes.push({ x: cx, y: cy, life: CLASH_FLASH })
-    for (let i = 0; i < SPARK_COUNT[outcome]; i++) {
+    for (let i = 0; i < count; i++) {
       const ang = Math.random() * Math.PI * 2
       const speed = 150 + Math.random() * 250
       const life = SPARK_LIFE * (0.5 + Math.random() * 0.5)
@@ -282,7 +320,7 @@ export function useVersusDuel(
   }
 
   function drawHitFlashes(ctx: CanvasRenderingContext2D): void {
-    for (const f of hitFlashes) drawSprite(ctx, f.spriteId, Math.round(f.x), Math.round(f.y), 1)
+    for (const f of hitFlashes) drawSprite(ctx, f.spriteId, Math.round(f.x), Math.round(f.y), f.scale)
   }
 
   function drawParticles(ctx: CanvasRenderingContext2D): void {
@@ -398,7 +436,8 @@ export function useVersusDuel(
 
   function drawWeapon(ctx: CanvasRenderingContext2D, w: WeaponEntity): void {
     const spriteId = w.def.spriteId
-    if (!spriteId) return
+    // Summoners (Shuriken) have no blade to draw; their shurikens are projectiles.
+    if (!spriteId || w.def.summon) return
     const owner = engine!.world.ballById(w.ownerId)
     const pivot = w.def.pivot
     // Anchor the grip at the ball surface along the weapon angle, so the
@@ -413,16 +452,45 @@ export function useVersusDuel(
     // Scale so the drawn grip→tip span equals the engine's weapon length:
     // what you see is exactly the hitbox.
     const scale = w.def.spriteReach ? w.def.length / w.def.spriteReach : 2
+    // Riposte ready: a pulsing gold glow — two pixel rings (outer orange,
+    // inner gold) all round the blade, including diagonals.
+    if (w.riposteSteps > 0) {
+      const pulse = reduced ? 1 : 0.8 + 0.2 * Math.sin(engine!.world.tick * 0.5)
+      const o = Math.max(1, Math.round(scale)) // one sprite pixel
+      const ring = (d: number) => [[d, 0], [-d, 0], [0, d], [0, -d], [d, d], [-d, d], [d, -d], [-d, -d]] as const
+      ctx.save()
+      ctx.globalAlpha = 0.6 * pulse
+      for (const [dx, dy] of ring(2 * o)) {
+        drawSpriteSilhouette(ctx, spriteId, anchorX + dx, anchorY + dy, scale, w.angle, pivot, RIPOSTE_GLOW_OUTER)
+      }
+      ctx.globalAlpha = pulse
+      for (const [dx, dy] of ring(o)) {
+        drawSpriteSilhouette(ctx, spriteId, anchorX + dx, anchorY + dy, scale, w.angle, pivot, RIPOSTE_GLOW)
+      }
+      ctx.restore()
+    }
     drawSprite(ctx, spriteId, anchorX, anchorY, scale, w.angle, pivot)
   }
 
   function drawProjectile(ctx: CanvasRenderingContext2D, p: Projectile): void {
-    drawSprite(ctx, 'projectile:arrow', p.position.x, p.position.y, 1)
+    const def = weaponRegistry.get(p.weaponId)
+    if (def?.summon && def.spriteId) {
+      // Shuriken: its weapon sprite at 2× (blade ≈ 28 px, hit radius 12),
+      // always spinning (render-only angle).
+      const spin = (engine!.world.tick * 0.45 + p.id) % (Math.PI * 2)
+      drawSprite(ctx, def.spriteId, p.position.x, p.position.y, 2, spin)
+      return
+    }
+    // Point along the flight direction; pivot on the tip, where the engine's
+    // hit circle is, so what you see is what hits.
+    const angle = Math.atan2(p.velocity.y, p.velocity.x)
+    drawSprite(ctx, 'projectile:arrow', p.position.x, p.position.y, 2, angle, { x: 11.5, y: 2.5 })
   }
 
   function drawHpBars(ctx: CanvasRenderingContext2D): void {
+    // Only living balls: a dead ball's bar vanishes with its body and weapon.
     const balls = engine!.world.entities.filter(
-      (e): e is Ball => e.kind === 'ball',
+      (e): e is Ball => e.kind === 'ball' && e.alive,
     )
     const barW = 48
     const barH = 6
@@ -564,6 +632,7 @@ export function useVersusDuel(
     particles = []
     flashes = []
     hitFlashes = []
+    pendingSlam = null
     raf = requestAnimationFrame(frame)
   }
 

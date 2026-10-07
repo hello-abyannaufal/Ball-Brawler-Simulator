@@ -79,10 +79,29 @@ const spearProc: ProceduralDraw = (ctx, w) => {
   px(ctx, 4, 5, w - 10, 2, C.wood) // shaft
   px(ctx, w - 6, 4, 4, 4, C.steel) // tip
 }
-const orbitingBladeProc: ProceduralDraw = (ctx) => {
-  px(ctx, 13, 8, 6, 2, C.steel)
-  px(ctx, 15, 8, 2, 16, C.steel)
-  px(ctx, 13, 22, 6, 2, C.steel)
+/** Fallback if shuriken.png fails: 9×9 four-point shuriken, scaled to fit. */
+const SHURIKEN_9 = [
+  '....#....',
+  '...##....',
+  '...#L....',
+  '.#.LDL##.',
+  '##LDODL##',
+  '.##LDL.#.',
+  '....L#...',
+  '....##...',
+  '....#....',
+]
+const shurikenProc: ProceduralDraw = (ctx, w, h) => {
+  const k = Math.max(1, Math.floor(Math.min(w, h) / 9))
+  const ox = Math.floor((w - 9 * k) / 2)
+  const oy = Math.floor((h - 9 * k) / 2)
+  const col: Record<string, string> = { '#': C.steel, L: C.white, D: C.steelDark, O: C.ink }
+  SHURIKEN_9.forEach((row, y) => {
+    for (let x = 0; x < 9; x++) {
+      const c = col[row[x]!]
+      if (c) px(ctx, ox + x * k, oy + y * k, k, k, c)
+    }
+  })
 }
 const bowProc: ProceduralDraw = (ctx) => {
   px(ctx, 18, 8, 2, 16, C.wood) // right-bulging limb
@@ -92,9 +111,16 @@ const bowProc: ProceduralDraw = (ctx) => {
 }
 
 // ---- Projectiles ----
+/** 12×5 arrow pointing RIGHT (+x): fletching, wooden shaft, steel head. */
 const arrowProc: ProceduralDraw = (ctx) => {
-  px(ctx, 1, 3, 5, 2, C.wood)
-  px(ctx, 6, 3, 2, 2, C.steel)
+  px(ctx, 0, 0, 2, 1, C.red) // fletching
+  px(ctx, 0, 4, 2, 1, C.red)
+  px(ctx, 1, 1, 2, 1, C.red)
+  px(ctx, 1, 3, 2, 1, C.red)
+  px(ctx, 0, 2, 9, 1, C.wood) // shaft
+  px(ctx, 9, 1, 1, 3, C.steelDark) // head
+  px(ctx, 10, 1, 1, 3, C.steel)
+  px(ctx, 11, 2, 1, 1, C.white) // tip
 }
 const blasterShotProc: ProceduralDraw = (ctx) => {
   px(ctx, 2, 3, 4, 2, C.cyan)
@@ -148,11 +174,11 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'weapon:sword': { kind: 'image', src: '/sprites/weapons/sword.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:hammer': { kind: 'image', src: '/sprites/weapons/hammer.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:spear': { kind: 'image', src: '/sprites/weapons/spear.png', width: SIZE_SPEAR_W, height: SIZE_SPEAR_H },
-  'weapon:orbiting-blade': { kind: 'image', src: '/sprites/weapons/orbiting-blade.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
+  'weapon:shuriken': { kind: 'image', src: '/sprites/weapons/shuriken.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:bow': { kind: 'image', src: '/sprites/weapons/bow.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
 
   // Projectiles — procedural until PNGs exist.
-  'projectile:arrow': { kind: 'procedural', width: SIZE_PROJ, height: SIZE_PROJ, draw: arrowProc },
+  'projectile:arrow': { kind: 'procedural', width: 12, height: 5, draw: arrowProc },
   'projectile:blaster-shot': { kind: 'procedural', width: SIZE_PROJ, height: SIZE_PROJ, draw: blasterShotProc },
 
   // Hit-flash FX.
@@ -164,15 +190,15 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'icon:weapon:sword': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
   'icon:weapon:hammer': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
   'icon:weapon:spear': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
-  'icon:weapon:orbiting-blade': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steelDark, false) },
+  'icon:weapon:shuriken': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: shurikenProc },
   'icon:weapon:bow': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
 
   // Weapon procedural fallbacks are also exposed under *:proc ids so the
   // renderer can prefer them if an image fails to load.
   'weapon:sword:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: swordProc },
   'weapon:hammer:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hammerProc },
+  'weapon:shuriken:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: shurikenProc },
   'weapon:spear:proc': { kind: 'procedural', width: SIZE_SPEAR_W, height: SIZE_SPEAR_H, draw: spearProc },
-  'weapon:orbiting-blade:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: orbitingBladeProc },
   'weapon:bow:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: bowProc },
 }
 

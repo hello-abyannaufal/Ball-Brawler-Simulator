@@ -20,6 +20,7 @@ import {
 type Baked = { canvas: HTMLCanvasElement; width: number; height: number }
 
 const cache = new Map<string, Baked>()
+const silhouettes = new Map<string, Baked>() // `${spriteId}|${color}` → tinted copy
 let preloaded = false
 
 function makeCanvas(w: number, h: number): HTMLCanvasElement {
@@ -126,5 +127,44 @@ export function useSprites() {
     ctx.restore()
   }
 
-  return { preloadAll, drawSprite }
+  /**
+   * Draw a sprite's solid-color silhouette (same placement as drawSprite).
+   * Used for pixel outlines/glows: draw it offset around the real sprite.
+   */
+  function drawSpriteSilhouette(
+    ctx: CanvasRenderingContext2D,
+    id: string,
+    x: number,
+    y: number,
+    scale: number,
+    angle: number | undefined,
+    pivot: { x: number; y: number } | undefined,
+    color: string,
+  ): void {
+    const key = `${id}|${color}`
+    let tinted = silhouettes.get(key)
+    if (!tinted) {
+      const src = ensureBaked(id)
+      const canvas = makeCanvas(src.width, src.height)
+      const c = canvas.getContext('2d')
+      if (c) {
+        c.drawImage(src.canvas, 0, 0)
+        c.globalCompositeOperation = 'source-in' // keep alpha, replace color
+        c.fillStyle = color
+        c.fillRect(0, 0, src.width, src.height)
+      }
+      tinted = { canvas, width: src.width, height: src.height }
+      silhouettes.set(key, tinted)
+    }
+    const px = pivot?.x ?? tinted.width / 2
+    const py = pivot?.y ?? tinted.height / 2
+    ctx.save()
+    ctx.imageSmoothingEnabled = false
+    ctx.translate(x, y)
+    if (angle) ctx.rotate(angle)
+    ctx.drawImage(tinted.canvas, -px * scale, -py * scale, tinted.width * scale, tinted.height * scale)
+    ctx.restore()
+  }
+
+  return { preloadAll, drawSprite, drawSpriteSilhouette }
 }

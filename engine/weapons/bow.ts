@@ -11,12 +11,14 @@ export const bow: WeaponDefinition = {
   angularSpeed: 2.8,
   weight: 5,
   hitCooldown: 400,
+  projectileBlockable: true, // arrows can be swatted by melee weapons
   hitbox: { shape: 'segment', length: 24, thickness: 8 },
   projectile: {
-    speed: 160,
-    radius: 3,
+    speed: 320,
+    radius: 4, // circle at the arrow tip
     damage: 7,
-    fireInterval: 90,
+    fireInterval: 100,
+    facingDegrees: 5, // narrow cone: fires less often
   },
   spriteId: 'weapon:bow',
   iconId: 'icon:weapon:bow',

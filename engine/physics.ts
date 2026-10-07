@@ -112,6 +112,24 @@ export function bounceBalls(a: Ball, b: Ball): void {
 }
 
 /**
+ * Launch `struck` straight away from `striker` at `speed`, REPLACING its
+ * velocity (a heavy blow). Unlike `applyKnockback`, the struck ball's own
+ * motion toward the striker can't cancel the hit out.
+ */
+export function launchAway(striker: Ball, struck: Ball, speed: number): void {
+  let dx = struck.position.x - striker.position.x
+  let dy = struck.position.y - striker.position.y
+  let dist = Math.sqrt(dx * dx + dy * dy)
+  if (dist === 0) {
+    dx = 1
+    dy = 0
+    dist = 1
+  }
+  struck.velocity.x = (dx / dist) * speed
+  struck.velocity.y = (dy / dist) * speed
+}
+
+/**
  * Apply a knockback impulse to `struck`, directed along the line from the
  * striker's center to the struck ball's center (Req 8.6).
  */

@@ -2,7 +2,7 @@
 export { sword } from './sword'
 export { hammer } from './hammer'
 export { spear } from './spear'
-export { orbitingBlade } from './orbiting-blade'
+export { shuriken } from './shuriken'
 export { bow } from './bow'
 
 export { weaponRegistry, WeaponRegistry } from './registry'

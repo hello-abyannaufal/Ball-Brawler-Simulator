@@ -443,7 +443,7 @@ A definition missing a required field or with an out-of-bound value is rejected 
 | `sword.ts` | `sword` | held | baseline |
 | `hammer.ts` | `hammer` | held | heaviest `weight`; `cannotBeParried: true` (Req 10.11, 10.12) |
 | `spear.ts` | `spear` | held | greatest `length` (Req 10.11) |
-| `orbiting-blade.ts` | `orbiting-blade` | orbit | uses `angularSpeed` + orbit radius |
+| `shuriken.ts` | `shuriken` | orbit | summoner: circling shurikens (projectiles), thrown in a fan at max stack (was `orbiting-blade`) |
 | `bow.ts` | `bow` | held | `projectile` settings present (Req 10.11) |
 
 ### Engine: roulette (`engine/roulette.ts`)

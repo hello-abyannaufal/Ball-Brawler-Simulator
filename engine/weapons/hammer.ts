@@ -7,12 +7,15 @@ export const hammer: WeaponDefinition = {
   name: 'Hammer',
   mode: 'orbit',
   length: 42,
-  damage: 12,
+  damage: 10,
   angularSpeed: 2.4, // heavy = slow spin
   weight: 30, // heaviest starter
-  hitCooldown: 900,
+  hitCooldown: 1100,
   hitbox: { shape: 'circle', radius: 16 }, // the head, at the tip
   cannotBeParried: true,
+  launchSpeed: 540, // heavy blow: sends the target flying away
+  reboundOnHit: true, // solid head bounces off instead of passing through
+  wallSlam: { damage: 6, windowSteps: 45 }, // hit a wall within 0.75 s → +6
   spriteId: 'weapon:hammer',
   iconId: 'icon:weapon:hammer',
   pivot: { x: 5, y: 16 },

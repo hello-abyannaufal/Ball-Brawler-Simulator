@@ -33,6 +33,24 @@ interface LibraryState {
   duels: SavedDuel[]
 }
 
+/** Weapon ids that were renamed; old saves are mapped on load and import. */
+const RENAMED_WEAPONS: Record<string, string> = { 'orbiting-blade': 'shuriken' }
+
+/** Rewrite renamed weapon ids in saved balls (pure; returns new objects). */
+export function migrateBalls(balls: SavedBall[]): SavedBall[] {
+  return balls.map((b) => {
+    const weapons = b.config?.weapons ?? []
+    if (!weapons.some((w) => w.weaponId in RENAMED_WEAPONS)) return b
+    return {
+      ...b,
+      config: {
+        ...b.config,
+        weapons: weapons.map((w) => ({ ...w, weaponId: RENAMED_WEAPONS[w.weaponId] ?? w.weaponId })),
+      },
+    }
+  })
+}
+
 let idSeq = 0
 function makeId(prefix: string): string {
   idSeq += 1
@@ -79,7 +97,7 @@ export const useLibraryStore = defineStore('library', {
 
     /** Replace the entire library state (used by import). */
     replaceAll(next: Partial<LibraryState>): void {
-      this.balls = next.balls ?? []
+      this.balls = migrateBalls(next.balls ?? [])
       this.weapons = next.weapons ?? []
       this.duels = next.duels ?? []
       this.skills = []
@@ -91,5 +109,8 @@ export const useLibraryStore = defineStore('library', {
   // load Pinia initialises to the empty state above (Req 13.4, 13.5).
   persist: {
     storage: failSafeStorage,
+    afterRestore: (ctx) => {
+      ctx.store.balls = migrateBalls(ctx.store.balls)
+    },
   },
 })

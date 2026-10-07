@@ -33,6 +33,9 @@ export interface DamageSource {
 export interface DamageFlags {
   readonly isReflected?: boolean // reflected damage cannot reflect again (Req 6.9)
   readonly summonOwnerId?: EntityId // when set, credits owner (Req 6.8)
+  /** How the hit should feel; copied onto the damage event for the renderer.
+   *  `critical`: a boosted hit (riposte, spear tip). */
+  readonly style?: 'critical'
 }
 
 export interface ApplyDamageInput {
@@ -104,6 +107,7 @@ export function applyDamage(
     attackerId: creditedAttacker,
     targetId: target.id,
     amount: applied,
+    ...(input.flags?.style ? { style: input.flags.style } : {}),
   })
 
   let killed = false

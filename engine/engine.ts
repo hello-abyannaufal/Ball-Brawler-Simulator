@@ -1,11 +1,11 @@
-import type { Ball, EntityId, WeaponEntity } from './entities'
+import type { Ball, EntityId, Projectile, Vec2, WeaponEntity } from './entities'
 import type { DuelConfig } from './config'
 import type { EngineEvent } from './events'
 import type { WeaponInstance } from './weapons/types'
 import { World } from './world'
 import { createRng } from './rng'
 import { applyDamage } from './damage'
-import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback } from './physics'
+import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback, launchAway } from './physics'
 import { runStatusEffects } from './status'
 import { CooldownTable } from './cooldown'
 import { weaponRegistry } from './weapons/registry'
@@ -13,6 +13,8 @@ import {
   weaponHitsBall,
   weaponsOverlap,
   resolveClash,
+  bladeHitFraction,
+  weaponTouchesCircle,
 } from './weapons/combat'
 
 export const engineVersion = '1.0.0' // non-empty string (Req 5.8)
@@ -25,10 +27,13 @@ const CLASH_COOLDOWN_STEPS = 10
 /** Base knockback magnitude applied to both balls on a weapon clash. */
 const CLASH_KNOCKBACK = 120
 /** Steps a disarmed weapon stays harmless. */
-const DISARM_STUN_STEPS = 40
+const DISARM_STUN_STEPS = 18
 /** Per-step fraction of the gap between current speed and cruise speed that
  *  is closed. Knockback is a burst that fades instead of accumulating. */
 const SPEED_RECOVERY = 0.04
+/** Slower recovery while a ball is flying from a heavy blow (slam pending),
+ *  so the launch actually carries it across the arena. */
+const SPEED_RECOVERY_LAUNCHED = 0.012
 
 export interface EngineOptions {
   seed: number
@@ -81,6 +86,7 @@ export function createEngine(opts: EngineOptions): Engine {
       cruiseSpeed: Math.hypot(bc.initialVelocity.x, bc.initialVelocity.y),
       weapons,
       statusEffects: [],
+      slam: null,
     }
     world.add(ball)
 
@@ -97,6 +103,7 @@ export function createEngine(opts: EngineOptions): Engine {
         angle: 0,
         angularSpeed: inst.def.angularSpeed, // runtime; flips on clash
         stunSteps: 0,
+        riposteSteps: 0,
         hitbox: inst.def.hitbox,
       }
       world.add(we)
@@ -105,6 +112,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
   const cooldowns = new CooldownTable()
   const weaponFireTimers = new Map<EntityId, number>()
+  const summonTimers = new Map<EntityId, number>()
   // Weapon pairs overlapping last step: a clash fires only when a pair first
   // touches, not on every frame of a sustained overlap.
   let touchingPairs = new Set<string>()
@@ -136,8 +144,9 @@ export function createEngine(opts: EngineOptions): Engine {
     return best
   }
 
-  // Projectile fires only when the weapon faces an opponent within this cone.
-  const FACING_THRESHOLD = (15 * Math.PI) / 180 // ±15°
+  // Projectile fires only when the weapon faces an opponent within this cone
+  // (per weapon via `projectile.facingDegrees`).
+  const DEFAULT_FACING_DEGREES = 15
 
   /** Smallest absolute difference between two angles, in [0, π]. */
   function angleDiff(a: number, b: number): number {
@@ -145,6 +154,37 @@ export function createEngine(opts: EngineOptions): Engine {
     if (d > Math.PI) d -= Math.PI * 2
     if (d < -Math.PI) d += Math.PI * 2
     return Math.abs(d)
+  }
+
+  /**
+   * Unit direction from `from` that intercepts `target` (moving at constant
+   * velocity) with a projectile of `speed`; straight at it if no intercept.
+   */
+  function leadDirection(from: Vec2, target: Ball, speed: number): [number, number] {
+    const rx = target.position.x - from.x
+    const ry = target.position.y - from.y
+    const vx = target.velocity.x
+    const vy = target.velocity.y
+    // |r + v t| = speed · t  →  a t² + b t + c = 0
+    const a = vx * vx + vy * vy - speed * speed
+    const b = 2 * (rx * vx + ry * vy)
+    const c = rx * rx + ry * ry
+    let t = -1
+    if (Math.abs(a) < 1e-9) {
+      if (b < 0) t = -c / b
+    } else {
+      const disc = b * b - 4 * a * c
+      if (disc >= 0) {
+        const sq = Math.sqrt(disc)
+        const t1 = (-b - sq) / (2 * a)
+        const t2 = (-b + sq) / (2 * a)
+        t = Math.min(t1, t2) > 0 ? Math.min(t1, t2) : Math.max(t1, t2)
+      }
+    }
+    const ax = t > 0 ? rx + vx * t : rx
+    const ay = t > 0 ? ry + vy * t : ry
+    const len = Math.hypot(ax, ay) || 1
+    return [ax / len, ay / len]
   }
 
   // op 1: move weapons. All starter weapons orbit with a static angularSpeed.
@@ -160,9 +200,12 @@ export function createEngine(opts: EngineOptions): Engine {
       // from the def; its SIGN flips when the weapon clashes — a struck blade
       // is knocked into reverse spin). The weapon spans [surface, surface +
       // length]: a segment hitbox is centered on that span, a circle hitbox
-      // (hammer head, orbiting blade) sits at its far end.
-      w.angle += w.angularSpeed * TIMESTEP
+      // (hammer head) sits at its far end.
+      // Riposte spin burst: faster spin while the riposte is ready.
+      const boost = w.riposteSteps > 0 ? (w.def.riposte?.spinBoost ?? 1) : 1
+      w.angle += w.angularSpeed * boost * TIMESTEP
       if (w.stunSteps > 0) w.stunSteps -= 1
+      if (w.riposteSteps > 0) w.riposteSteps -= 1
       const orbitRadius =
         w.hitbox.shape === 'circle'
           ? owner.radius + w.def.length - w.hitbox.radius
@@ -171,6 +214,8 @@ export function createEngine(opts: EngineOptions): Engine {
         x: owner.position.x + Math.cos(w.angle) * orbitRadius,
         y: owner.position.y + Math.sin(w.angle) * orbitRadius,
       }
+
+      if (w.def.summon) updateSummons(w, owner)
 
       // Projectile weapons (e.g. Bow) fire only while facing an opponent AND
       // the cooldown is ready (Req 10.10). Range does not matter.
@@ -185,13 +230,14 @@ export function createEngine(opts: EngineOptions): Engine {
             target.position.y - owner.position.y,
             target.position.x - owner.position.x,
           )
-          facing = angleDiff(w.angle, toTarget) <= FACING_THRESHOLD
+          facing = angleDiff(w.angle, toTarget) <= ((ps.facingDegrees ?? DEFAULT_FACING_DEGREES) * Math.PI) / 180
         }
 
-        if (ready && facing) {
+        if (ready && facing && target) {
           weaponFireTimers.set(w.id, 0)
-          const dx = Math.cos(w.angle)
-          const dy = Math.sin(w.angle)
+          // Aim at where the target WILL be (constant-velocity lead), so the
+          // arrow actually flies at the opponent. Deterministic: positions only.
+          const [dx, dy] = leadDirection(w.position, target, ps.speed)
           world.add({
             id: world.allocateId(),
             kind: 'projectile',
@@ -204,11 +250,107 @@ export function createEngine(opts: EngineOptions): Engine {
             radius: ps.radius,
             damage: ps.damage,
             ownerId: w.ownerId,
+            blockable: !!w.def.projectileBlockable,
+            weaponId: w.def.id,
+            orbiting: false,
+            orbitSlot: -1,
+            bounceSteps: 0,
           })
         } else {
           weaponFireTimers.set(w.id, Math.min(timer + 1, ps.fireInterval))
         }
       }
+    }
+  }
+
+  /** This weapon's shurikens still circling its owner, in stable id order. */
+  function circlingOf(w: WeaponEntity): Projectile[] {
+    return world.entities.filter(
+      (e): e is Projectile => e.kind === 'projectile' && e.alive && e.orbiting && e.ownerId === w.ownerId && e.weaponId === w.def.id,
+    )
+  }
+
+  /**
+   * Summoner weapons (Shuriken): grow a ring of circling shurikens, then throw
+   * the full ring in a fan at the opponent. Deterministic (step counters and
+   * positions only).
+   */
+  function updateSummons(w: WeaponEntity, owner: Ball): void {
+    const cfg = w.def.summon!
+    let ring = circlingOf(w)
+
+    // Summon one more every intervalSteps while below the stack limit.
+    if (ring.length < cfg.maxStack) {
+      const t = (summonTimers.get(w.id) ?? 0) + 1
+      if (t >= cfg.intervalSteps) {
+        summonTimers.set(w.id, 0)
+        // Take the first free slot; the others never move to make room.
+        const used = new Set(ring.map((r) => r.orbitSlot))
+        let slot = 0
+        while (used.has(slot)) slot++
+        const p: Projectile = {
+          id: world.allocateId(),
+          kind: 'projectile',
+          position: { ...owner.position },
+          velocity: { x: 0, y: 0 },
+          alive: true,
+          radius: cfg.radius,
+          damage: cfg.orbitDamage,
+          ownerId: owner.id,
+          blockable: true,
+          weaponId: w.def.id,
+          orbiting: true,
+          orbitSlot: slot,
+          bounceSteps: 0,
+        }
+        world.add(p)
+        ring = [...ring, p]
+      } else {
+        summonTimers.set(w.id, t)
+      }
+    }
+
+    // Circle the ball on FIXED slots, riding the weapon's spin. Slots don't
+    // re-space when one breaks: re-spacing made the survivors jump into the
+    // blade that just broke one, so a single swing wiped the whole ring.
+    const orbit = owner.radius + cfg.orbitGap
+    ring.forEach((p) => {
+      const a = w.angle + (p.orbitSlot * 2 * Math.PI) / cfg.maxStack
+      p.position = { x: owner.position.x + Math.cos(a) * orbit, y: owner.position.y + Math.sin(a) * orbit }
+      p.velocity = { x: owner.velocity.x, y: owner.velocity.y }
+    })
+
+    // Full stack: throw the whole ring in a fan centered on the led opponent.
+    const target = nearestOpponent(owner.id, owner.position)
+    if (ring.length >= cfg.maxStack && target) {
+      const [dx, dy] = leadDirection(owner.position, target, cfg.throwSpeed)
+      const center = Math.atan2(dy, dx)
+      const spread = (cfg.spreadDegrees * Math.PI) / 180
+      ring.forEach((p, i) => {
+        const a = center + spread * (ring.length > 1 ? i / (ring.length - 1) - 0.5 : 0)
+        p.orbiting = false
+        p.orbitSlot = -1
+        p.damage = cfg.throwDamage
+        p.bounceSteps = cfg.bounceSteps
+        p.velocity = { x: Math.cos(a) * cfg.throwSpeed, y: Math.sin(a) * cfg.throwSpeed }
+      })
+      summonTimers.set(w.id, 0)
+    }
+  }
+
+  /**
+   * Ready a riposte on `w` (if it has one): open the window and turn the
+   * blade's spin toward the opponent, the shortest way round, for the burst.
+   */
+  function readyRiposte(w: WeaponEntity): void {
+    if (!w.def.riposte) return
+    w.riposteSteps = w.def.riposte.windowSteps
+    const me = world.ballById(w.ownerId)
+    const foe = me && nearestOpponent(me.id, me.position)
+    if (me && foe) {
+      let d = Math.atan2(foe.position.y - me.position.y, foe.position.x - me.position.x) - w.angle
+      d = Math.atan2(Math.sin(d), Math.cos(d)) // wrap to (-π, π]
+      w.angularSpeed = Math.sign(d || 1) * Math.abs(w.def.angularSpeed)
     }
   }
 
@@ -222,6 +364,7 @@ export function createEngine(opts: EngineOptions): Engine {
         const a = weapons[i]!
         const b = weapons[j]!
         if (a.ownerId === b.ownerId) continue // same ball's weapons don't clash
+        if (a.def.summon || b.def.summon) continue // summoners have no blade; their shurikens are projectiles
         if (!weaponsOverlap(a, b)) continue
         const pairKey = `${a.id}:${b.id}`
         nowTouching.add(pairKey)
@@ -250,6 +393,13 @@ export function createEngine(opts: EngineOptions): Engine {
           b.angularSpeed = -b.angularSpeed
         }
 
+        // Riposte: any clash the weapon isn't disarmed in (bounce, parry, or
+        // disarming the other) readies a boosted next hit.
+        for (const [self, other] of [[a, b], [b, a]] as const) {
+          const won = outcome !== 'disarm' || self.def.weight > other.def.weight
+          if (won) readyRiposte(self)
+        }
+
         // ...and knock BOTH owner balls apart along their center line
         // (Req 10.8 forbids damage, not knockback).
         const oa = world.ballById(a.ownerId)
@@ -275,33 +425,84 @@ export function createEngine(opts: EngineOptions): Engine {
       const owner = world.ballById(w.ownerId)
       if (!owner) continue
       if (w.def.damage <= 0) continue
-      if (w.stunSteps > 0 || clashedThisStep.has(w.id)) continue // disarmed / blocked
+      if (w.stunSteps > 0) continue // disarmed
+      if (clashedThisStep.has(w.id)) continue // blocked by a clash this step
       for (const ball of world.aliveBalls()) {
         if (ball.id === w.ownerId) continue
         if (!weaponHitsBall(w, ball)) continue
         // Keyed by the weapon so each weapon has its own hitCooldown.
         if (cooldowns.isActive(w.id, ball.id)) continue
 
+        // Boosted hits: Spear tip strike, Sword riposte (multipliers stack).
+        let mult = 1
+        const tip = w.def.tipStrike
+        if (tip && bladeHitFraction(w, ball) >= 1 - tip.fraction) mult *= tip.multiplier
+        if (w.def.riposte && w.riposteSteps > 0) {
+          mult *= w.def.riposte.multiplier
+          w.riposteSteps = 0 // spent
+        }
+
         const outcome = applyDamage(world, {
           source: { tag: 'weapon' },
           attackerId: w.ownerId,
           targetId: ball.id,
-          amount: w.def.damage,
+          amount: w.def.damage * mult,
+          ...(mult > 1 ? { flags: { style: 'critical' as const } } : {}),
         })
         if (outcome.kind === 'applied') {
           cooldowns.start(w.id, ball.id, Math.round(w.def.hitCooldown / 1000 / TIMESTEP))
-          applyKnockback(owner, ball, HIT_KNOCKBACK)
+          if (w.def.launchSpeed) launchAway(owner, ball, w.def.launchSpeed)
+          else applyKnockback(owner, ball, HIT_KNOCKBACK)
+          if (w.def.reboundOnHit) w.angularSpeed = -w.angularSpeed
+          if (w.def.wallSlam && ball.alive) {
+            ball.slam = { attackerId: owner.id, damage: w.def.wallSlam.damage, steps: w.def.wallSlam.windowSteps }
+          }
         }
       }
+    }
+  }
+
+  /** op 4 (wall-slam part): a pending slam turns a wall bounce into damage, once. */
+  function applyWallSlams(slammed: Ball[]): void {
+    for (const ball of slammed) {
+      const slam = ball.slam
+      ball.slam = null
+      if (!slam || !ball.alive) continue
+      // Contact point: the ball's edge on the wall side it just bounced off.
+      const { width, height } = world.arena
+      const r = ball.radius
+      const x = ball.position.x <= r ? 0 : ball.position.x >= width - r ? width : ball.position.x
+      const y = ball.position.y <= r ? 0 : ball.position.y >= height - r ? height : ball.position.y
+      world.emit({ type: 'wallSlam', ballId: ball.id, attackerId: slam.attackerId, x, y })
+      applyDamage(world, {
+        source: { tag: 'weapon' },
+        attackerId: slam.attackerId,
+        targetId: ball.id,
+        amount: slam.damage,
+      })
     }
   }
 
   // op 1 + op 4 (projectile part): move projectiles, damage opposing balls (Req 10.10).
   function moveProjectiles(): void {
     for (const p of world.entities) {
-      if (p.kind !== 'projectile' || !p.alive) continue
+      if (p.kind !== 'projectile' || !p.alive || p.orbiting) continue
       p.position.x += p.velocity.x * TIMESTEP
       p.position.y += p.velocity.y * TIMESTEP
+      // Bouncing (thrown shurikens): reflect off walls until the timer runs out.
+      if (p.bounceSteps > 0) {
+        const { width, height } = world.arena
+        if (p.position.x < p.radius || p.position.x > width - p.radius) {
+          p.velocity.x = -p.velocity.x
+          p.position.x = Math.min(width - p.radius, Math.max(p.radius, p.position.x))
+        }
+        if (p.position.y < p.radius || p.position.y > height - p.radius) {
+          p.velocity.y = -p.velocity.y
+          p.position.y = Math.min(height - p.radius, Math.max(p.radius, p.position.y))
+        }
+        if (--p.bounceSteps <= 0) p.alive = false
+        continue
+      }
       // Despawn when leaving the arena bounds.
       if (
         p.position.x < 0 ||
@@ -315,8 +516,61 @@ export function createEngine(opts: EngineOptions): Engine {
   }
 
   function applyProjectileHits(): void {
-    for (const p of world.entities) {
-      if (p.kind !== 'projectile' || !p.alive) continue
+    const weapons = liveWeapons()
+    const projectiles = world.entities.filter((e): e is Projectile => e.kind === 'projectile')
+    const blocked = (p: Projectile, by: EntityId) => {
+      p.alive = false
+      world.emit({ type: 'projectileBlocked', projectileId: p.id, weaponId: by, x: p.position.x, y: p.position.y })
+    }
+    /** Send `p` back at its shooter, now owned (and credited) by the reflector. */
+    const reflect = (p: Projectile, by: WeaponEntity) => {
+      const shooter = world.ballById(p.ownerId)
+      const speed = Math.hypot(p.velocity.x, p.velocity.y)
+      const [dx, dy] = shooter?.alive
+        ? leadDirection(p.position, shooter, speed)
+        : [-p.velocity.x / (speed || 1), -p.velocity.y / (speed || 1)]
+      p.ownerId = by.ownerId
+      p.velocity = { x: dx * speed, y: dy * speed }
+      world.emit({ type: 'projectileReflected', projectileId: p.id, weaponId: by.id, x: p.position.x, y: p.position.y })
+    }
+    for (const p of projectiles) {
+      if (!p.alive) continue
+      // Swatted: an opposing bladed weapon touching it destroys it. A circling
+      // shuriken also breaks on a Bow; a flying arrow can't be swatted by one.
+      if (p.blockable) {
+        const blocker = weapons.find(
+          (w) =>
+            w.ownerId !== p.ownerId
+            && !w.def.summon
+            && (p.orbiting || !w.def.projectile)
+            && weaponTouchesCircle(w, p.position.x, p.position.y, p.radius),
+        )
+        if (blocker) {
+          const r = blocker.def.riposte
+          if (r?.reflectProjectiles && blocker.riposteSteps > 0 && !p.orbiting) {
+            reflect(p, blocker)
+          } else {
+            blocked(p, blocker.id)
+            // Breaking a CIRCLING shuriken counts as a parry: it readies the
+            // riposte. Swatting a flying projectile does not.
+            if (p.orbiting) readyRiposte(blocker)
+          }
+          continue
+        }
+      }
+      // A circling shuriken intercepts an opposing flying projectile: both break.
+      if (p.orbiting) {
+        const hit = projectiles.find(
+          (q) =>
+            q.alive && !q.orbiting && q.ownerId !== p.ownerId
+            && (q.position.x - p.position.x) ** 2 + (q.position.y - p.position.y) ** 2 <= (q.radius + p.radius) ** 2,
+        )
+        if (hit) {
+          blocked(hit, p.id)
+          blocked(p, p.id)
+          continue
+        }
+      }
       for (const ball of world.aliveBalls()) {
         if (ball.id === p.ownerId) continue
         const dx = ball.position.x - p.position.x
@@ -324,14 +578,16 @@ export function createEngine(opts: EngineOptions): Engine {
         const sum = p.radius + ball.radius
         if (dx * dx + dy * dy > sum * sum) continue
 
+        // Consumed on hit — flying or circling (a circling shuriken breaks on
+        // the opponent's ball, the same as on an opposing weapon).
+        p.alive = false
         applyDamage(world, {
           source: { tag: 'projectile' },
           attackerId: p.ownerId, // credited to the owner (Req 10.10)
           targetId: ball.id,
           amount: p.damage,
         })
-        p.alive = false // projectile is consumed on hit
-        break // consumed
+        break
       }
     }
   }
@@ -342,11 +598,16 @@ export function createEngine(opts: EngineOptions): Engine {
    */
   function step(): void {
     // (1) move balls and weapons
+    const slammed: Ball[] = [] // hit a wall while a slam was pending; damaged in (4)
     for (const ball of world.aliveBalls()) {
       regulateSpeed(ball)
       ball.position.x += ball.velocity.x * TIMESTEP
       ball.position.y += ball.velocity.y * TIMESTEP
-      resolveWallCollision(ball, world.arena)
+      const bounced = resolveWallCollision(ball, world.arena)
+      if (ball.slam) {
+        if (bounced) slammed.push(ball)
+        else if (--ball.slam.steps <= 0) ball.slam = null // window expired
+      }
     }
     moveWeapons()
     moveProjectiles()
@@ -372,6 +633,7 @@ export function createEngine(opts: EngineOptions): Engine {
     // (5) apply knockback — bundled with each applied weapon hit.
     applyWeaponHits()
     applyProjectileHits()
+    applyWallSlams(slammed)
 
     // (6) run status effects
     runStatusEffects(world)
@@ -381,6 +643,10 @@ export function createEngine(opts: EngineOptions): Engine {
     // linger (or keep clashing) for a step after the owner is gone.
     for (const w of liveWeapons()) {
       if (!world.ballById(w.ownerId)?.alive) w.alive = false
+    }
+    // ...and its still-circling shurikens vanish with it (thrown ones keep flying).
+    for (const e of world.entities) {
+      if (e.kind === 'projectile' && e.alive && e.orbiting && !world.ballById(e.ownerId)?.alive) e.alive = false
     }
 
     // (7) check win condition
@@ -403,7 +669,8 @@ export function createEngine(opts: EngineOptions): Engine {
   function regulateSpeed(ball: Ball): void {
     const speed = Math.hypot(ball.velocity.x, ball.velocity.y)
     if (speed === 0) return
-    const target = speed + (ball.cruiseSpeed - speed) * SPEED_RECOVERY
+    const k = ball.slam ? SPEED_RECOVERY_LAUNCHED : SPEED_RECOVERY
+    const target = speed + (ball.cruiseSpeed - speed) * k
     ball.velocity.x *= target / speed
     ball.velocity.y *= target / speed
   }

@@ -9,6 +9,9 @@ export interface ProjectileSettings {
   radius: number
   damage: number
   fireInterval: number // steps
+  /** Fires only while the weapon points within ±this many degrees of the
+   *  nearest opponent (default 15). */
+  facingDegrees?: number
 }
 
 export interface WeaponDefinition {
@@ -23,12 +26,56 @@ export interface WeaponDefinition {
   readonly hitbox: Hitbox
   readonly projectile?: ProjectileSettings // optional (Req 10.1, 10.10)
   readonly cannotBeParried?: boolean // Hammer (Req 10.11, 10.12)
+  /** Heavy blow: on a hit, launch the struck ball straight away at this speed
+   *  (replaces its velocity). Without it a hit adds the base knockback impulse. */
+  readonly launchSpeed?: number
+  /** Solid weapon: its spin reverses on a hit, so it bounces off the ball
+   *  instead of sweeping through it. */
+  readonly reboundOnHit?: boolean
+  /** After a hit, if the struck ball hits a wall within `windowSteps`, it
+   *  takes `damage` once more (credited to the attacker, source `weapon`). */
+  readonly wallSlam?: { readonly damage: number; readonly windowSteps: number }
+  /** Sword: after any clash it isn't disarmed in, or breaking an opponent's
+   *  circling shuriken (not a flying projectile), a riposte is ready for
+   *  `windowSteps`: the next hit deals `multiplier` × damage. While ready, the
+   *  blade spins `spinBoost` × faster, turned toward the opponent, and (if
+   *  `reflectProjectiles`) sends opposing projectiles it touches back at their
+   *  shooter instead of destroying them. Spent by the boosted hit. */
+  readonly riposte?: {
+    readonly multiplier: number
+    readonly windowSteps: number
+    readonly spinBoost?: number
+    readonly reflectProjectiles?: boolean
+  }
+  /** Spear (segment hitbox): a hit landing in the outer `fraction` of the blade
+   *  deals `multiplier` × damage. */
+  readonly tipStrike?: { readonly fraction: number; readonly multiplier: number }
+  /** Summoner (Shuriken): the weapon itself has no blade. It summons a
+   *  projectile that circles the ball every `intervalSteps`; at `maxStack` it
+   *  throws them all in a fan at the opponent, and they bounce off walls for
+   *  `bounceSteps`. See SummonSettings. */
+  readonly summon?: SummonSettings
+  /** Projectiles of this weapon are destroyed by any opposing non-projectile
+   *  weapon they touch (Bow arrows can be swatted). */
+  readonly projectileBlockable?: boolean
   // --- Visual-reference only. Ignored by the engine; no effect on simulation
   //     or determinism. Consumed solely by the app-layer renderer. ---
   readonly spriteId?: string // arena sprite id
   readonly iconId?: string // 16x16 roulette/library icon id
   readonly pivot?: { x: number; y: number } // sprite-pixel rotation point
   readonly spriteReach?: number // sprite pixels from pivot to tip; renderer scale = length / spriteReach
+}
+
+export interface SummonSettings {
+  intervalSteps: number // one new shuriken every N steps while below maxStack
+  maxStack: number // throw when this many are circling
+  radius: number // hit circle of one shuriken
+  orbitGap: number // ball surface → shuriken center while circling
+  orbitDamage: number // circling shuriken touching the opponent (then it breaks)
+  throwSpeed: number
+  throwDamage: number // per thrown shuriken; each hits at most once
+  spreadDegrees: number // total fan angle, centered on the (led) opponent
+  bounceSteps: number // thrown shurikens bounce off walls this long, then vanish
 }
 
 /** A weapon carried by a ball, resolved from a WeaponRef against the registry. */

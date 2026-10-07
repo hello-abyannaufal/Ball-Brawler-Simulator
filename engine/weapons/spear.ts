@@ -7,10 +7,11 @@ export const spear: WeaponDefinition = {
   name: 'Spear',
   mode: 'orbit',
   length: 72, // longest starter
-  damage: 5,
+  damage: 6,
   angularSpeed: 3.0,
   weight: 8,
   hitCooldown: 600,
+  tipStrike: { fraction: 0.2, multiplier: 2 }, // outer 20% of the spear ×2
   hitbox: { shape: 'segment', length: 72, thickness: 8 },
   spriteId: 'weapon:spear',
   iconId: 'icon:weapon:spear',

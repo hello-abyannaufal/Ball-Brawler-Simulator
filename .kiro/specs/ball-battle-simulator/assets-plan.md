@@ -121,7 +121,7 @@ public/sprites/
   fx/        hit-contact.png hit-weapon.png hit-projectile.png
   icons/
     skills/  vampire.png spike.png blaster.png splitter.png grower.png
-    weapons/ sword.png hammer.png spear.png orbiting-blade.png bow.png
+    weapons/ sword.png hammer.png spear.png shuriken.png bow.png  (shuriken.png = the former orbiting-blade.png)
     nav/     home.png versus.png roulette.png library.png recordings.png settings.png
   ui/        button.png panel.png hpbar-frame.png hpbar-fill.png checkbox.png toggle.png winner-banner.png
   roulette/  reel-bg.png spin-button.png landing-glow.png
