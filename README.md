@@ -69,3 +69,72 @@ Runs both engine (Node env, no DOM) and app (happy-dom) test suites via Vitest.
 | `npm run lint` | Lint with ESLint                    |
 | `npm run db:generate` | Generate Drizzle migrations  |
 | `npm run db:migrate`  | Apply pending DB migrations  |
+
+## Architecture
+
+```
+pages/ (Vue, client)          composables/ (client-only)         engine/ (pure TS)
+ ├─ roulette.vue ──spinWheel──────────────────────────────────►  roulette.ts
+ ├─ versus.vue ──► useVersusDuel ──createEngine / step()──────►  engine.ts ─► world, physics,
+ │                  │  renderer, interpolation, FX                damage, status, cooldown,
+ │                  └─ onEvent ◄──── EngineEvent ────────────────  weapons/ (registry + defs)
+ │                useAudio / useRecorder (Web Audio, MediaRecorder)
+ ├─ library.vue / recordings.vue / settings.vue
+ ▼
+stores/ (Pinia, persisted to localStorage)       server/ (Nitro API)  ─► PostgreSQL (Drizzle)
+ library · roulette · settings · recordings       auth/register|login|logout, requireUser, can()
+ (recording blobs live in IndexedDB)
+```
+
+| Component | Responsibility |
+| --- | --- |
+| `engine/` | Framework-free simulation. `createEngine(config)` builds a `World`; `step()` runs one fixed 1/60 s step: move → collide → weapon clashes → damage + knockback → status effects → win check. Emits `EngineEvent`s (`damage`, `weaponClash`, `ballDied`, `matchEnded`). No Vue/Nuxt imports, no `Math.random()`, no wall-clock. |
+| `engine/weapons/` | One `WeaponDefinition` per file, validated and registered in `weaponRegistry`. Hitbox geometry lives here (`combat.ts`). |
+| `engine/roulette.ts` | `spinWheel(seed, segments)`: seeded, weighted draw. See `.kiro/specs/ball-battle-simulator/roulette.md`. |
+| `composables/useVersusDuel.ts` | Client driver: rAF loop (steps owed = real time × speed), interpolated rendering, hit-stop, particles, hit-flashes. Reads engine state; never writes it. |
+| `composables/useAudio.ts`, `useRecorder.ts` | Synthesized sounds per event; canvas + audio capture to WebM. |
+| `components/RouletteWheel.vue` | Pixel-art wheel, purely visual (lands on a result decided by the engine). |
+| `stores/` | `library` (saved balls/duels), `roulette` (wheel weights), `settings` (resolution, aspect ratio, sound, speed — sanitized on load), `recordings` (metadata; blobs in IndexedDB). |
+| `server/` | Auth API (`nuxt-auth-utils` sessions), `requireUser`, `can()` permission check, Drizzle schema/migrations. |
+
+**Data flow of a duel:** the Versus page builds a `DuelConfig { engineVersion, seed, ballConfigs, arenaConfig }` → `useVersusDuel` creates the engine and steps it from `requestAnimationFrame` → each step mutates the `World` and emits events → the composable renders the world to a canvas (at the Settings resolution) and forwards events to audio, FX, and the page (HP, winner) → optionally `useRecorder` captures the canvas + audio and `stores/recordings` saves it.
+
+## Extending
+
+### Add a Weapon
+
+1. Create `engine/weapons/<id>.ts` exporting a `WeaponDefinition` (`id`, `name`, `mode: 'orbit'`, `length`, `damage`, `angularSpeed`, `weight`, `hitCooldown`, `hitbox`, optional `projectile`, `cannotBeParried`) and call `weaponRegistry.register(def)`.
+2. Import it in `engine/weapons/index.ts`.
+3. Add its sprite to `public/sprites/weapons/<id>.png` and an entry in `assets/sprites/manifest.ts`; set `spriteId`, `pivot`, and `spriteReach` (sprite pixels from pivot to tip) so the drawn weapon matches its hitbox (check with *Show hitboxes* on `/versus`).
+4. It appears automatically on the roulette Weapon wheel.
+
+### Add a Damage_Source
+
+1. Add the tag to `DamageSourceTag` and `DAMAGE_SOURCE_TAGS` in `engine/damage.ts`.
+2. Route the new damage through `applyDamage(world, { source: { tag }, attackerId, targetId, amount })` from the engine step (never subtract HP directly).
+3. Add a hit-flash sprite (`fx:hit-<tag>` in `assets/sprites/manifest.ts`, distinct by shape) and map it in `HIT_FLASH_SPRITE` in `composables/useVersusDuel.ts`.
+4. Bump `engineVersion` (see Determinism).
+
+### Add a Skill (Trait / Ability)
+
+The original skill system was removed for now (task 16.8; code in commit `548a969`). It is planned to return as **Traits** (passive, on a ball or a weapon) and **Abilities** (active, with a cooldown). Until then:
+
+1. Agree the design first (targets, slots, compatibility, Ability triggers) — see `.kiro/specs/ball-battle-simulator/roulette.md` §5.
+2. Add the definitions + registry under `engine/` (the old `engine/skills/registry.ts` + hook calls in `engine.ts` are the reference pattern; keep hooks deterministic).
+3. Add a field to `BallConfig` and resolve it in `createEngine`.
+4. Add a roulette step: a `WheelKind` in `stores/roulette.ts` and an entry in `STEPS` in `pages/roulette.vue`; map the pick in `saveBall()`.
+5. Bump `engineVersion`.
+
+## Determinism
+
+- **Seeded RNG:** all engine randomness comes from `world.rng` (mulberry32, `engine/rng.ts`) created from the duel's 32-bit seed. Invalid seeds are rejected before any step.
+- **Fixed timestep:** every `step()` advances exactly 1/60 s in a fixed operation order; entity iteration order is stable (by id).
+- **Pure engine:** no `Math.random()`, `Date`, or `performance.now()` in `engine/`, and no framework imports. Rendering, FX, hit-stop, interpolation, and simulation speed only change *when* steps run or how they are drawn, never what a step computes.
+- **Same seed + same `DuelConfig` ⇒ identical duel**, which is what makes Rematch and replays work.
+- **`engineVersion`** (`engine/engine.ts`) is a string stamped into every saved `DuelConfig`. Increment it whenever a change can alter the outcome of an existing config (physics, combat, weapon stats, damage rules, RNG usage). Bump the minor version for balance/behavior changes and the major version for format changes. A saved duel whose `engineVersion` differs from the current one may not replay identically.
+
+## Roles
+
+- Roles are `superuser` and `viewer` (`shared/roles.ts`, DB enum in `server/db/schema.ts`). Authorization goes through one function, `can(user, action)` in `server/utils/permissions.ts`; today `superuser` may do everything and `viewer` nothing.
+- Planned evolution: introduce a real permission map (which actions each role may perform), assign `viewer` to new accounts, and grant `superuser` explicitly.
+- **Before any public deployment, `DEFAULT_ROLE` in `shared/roles.ts` must change from `superuser` to `viewer`.** While it is not `viewer`, every page shows a "not ready for public deployment" banner.

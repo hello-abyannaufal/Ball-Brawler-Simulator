@@ -40,3 +40,14 @@ export function defaultBalls(): BallConfig[] {
     },
   ]
 }
+
+/**
+ * Whole engine steps owed for `realSeconds` of wall time at `speed` (Req 15.7).
+ * Speed scales how MANY 1/60 s steps run per real second; each step's
+ * timestep stays exactly 1/60 s. Pure.
+ */
+export function stepsForElapsed(realSeconds: number, speed: number): number {
+  if (!(realSeconds > 0) || !(speed > 0)) return 0
+  // Epsilon guards float error (e.g. 0.1 * 60 = 5.999…).
+  return Math.floor(realSeconds * 60 * speed + 1e-9)
+}

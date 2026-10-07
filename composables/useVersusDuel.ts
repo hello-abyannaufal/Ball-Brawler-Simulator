@@ -5,7 +5,7 @@ import type { Ball, Entity, EntityId, Projectile, WeaponEntity } from '~/engine/
 import { createEngine, TIMESTEP, type Engine } from '~/engine/engine'
 import { useSprites } from '~/composables/useSprites'
 import { usePixelFont } from '~/composables/usePixelFont'
-import { hpBarFraction } from '~/utils/duel'
+import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
 import '~/engine/weapons/index'
 
 export interface HpView {
@@ -59,6 +59,11 @@ const SPARK_DRAG = 9
 const CLASH_FLASH = 0.08 // seconds the contact flash stays visible
 const CLASH_HIT_STOP = 0.05
 
+/** Per-source hit-flash (Req 16.5, 16.6): a 32×32 pixel sprite at the impact,
+ *  shaped differently per source (weapon = slash, projectile = cross burst). */
+const HIT_FLASH = 0.2 // seconds, within the required 50–500 ms
+const HIT_FLASH_SPRITE = { weapon: 'fx:hit-weapon', projectile: 'fx:hit-projectile' } as const
+
 interface Particle {
   x: number
   y: number
@@ -77,6 +82,20 @@ interface Flash {
   life: number
 }
 
+interface HitFlash {
+  x: number
+  y: number
+  life: number
+  spriteId: string
+}
+
+export interface VersusOptions {
+  showHitboxes?: boolean
+  /** prefers-reduced-motion: no hit-stop and no particle motion; the
+   *  simulation rate/outcome is unchanged and hit-flashes still show (Req 16.1, 16.2). */
+  reducedMotion?: boolean
+}
+
 /**
  * Client-only duel driver + retro renderer (Req 11.5, 11.6, 11.8, 11.10, 11.11).
  * Owns the rAF loop, advances the engine by whole 1/60s steps scaled by sim
@@ -88,8 +107,9 @@ export function useVersusDuel(
   duel: DuelConfig,
   seed: number,
   speed: number,
-  opts?: { showHitboxes?: boolean },
+  opts?: VersusOptions,
 ): VersusDuel {
+  const reduced = !!opts?.reducedMotion
   const { preloadAll, drawSprite } = useSprites()
   const { preloadFont, drawText } = usePixelFont()
 
@@ -106,6 +126,7 @@ export function useVersusDuel(
   let hitStop = 0 // seconds of freeze remaining
   let particles: Particle[] = []
   let flashes: Flash[] = []
+  let hitFlashes: HitFlash[] = []
   // Entity state before the latest step, for render interpolation.
   let prev = new Map<EntityId, { x: number; y: number; angle: number }>()
 
@@ -116,9 +137,14 @@ export function useVersusDuel(
       onEvent: (e) => {
         view.lastEvent.value = e
         if (e.type === 'damage' && e.amount > 0) {
+          const sprite = HIT_FLASH_SPRITE[e.source.tag as keyof typeof HIT_FLASH_SPRITE]
+          const at = impactPoint(e.targetId, e.attackerId)
+          if (sprite && at) hitFlashes.push({ ...at, life: HIT_FLASH, spriteId: sprite })
+          if (reduced) return // decorative motion off; flash above still shows
           hitStop = HIT_STOP
           spawnBlood(e.targetId, e.attackerId, e.amount)
         } else if (e.type === 'weaponClash') {
+          if (reduced) return
           hitStop = Math.max(hitStop, CLASH_HIT_STOP)
           spawnSparks(e.a, e.b, e.outcome)
         }
@@ -147,6 +173,19 @@ export function useVersusDuel(
    * from the attacker in a ~110° cone. Falls back to a full ring when there is
    * no attacker (e.g. reflected/environment damage).
    */
+  /** Target's surface point facing the attacker (its center if no attacker). */
+  function impactPoint(targetId: EntityId, attackerId: EntityId | ''): { x: number; y: number } | null {
+    const target = engine?.world.ballById(targetId)
+    if (!target) return null
+    const attacker = attackerId === '' ? undefined : engine!.world.ballById(attackerId)
+    if (!attacker) return { x: target.position.x, y: target.position.y }
+    const dir = Math.atan2(target.position.y - attacker.position.y, target.position.x - attacker.position.x)
+    return {
+      x: target.position.x - Math.cos(dir) * target.radius,
+      y: target.position.y - Math.sin(dir) * target.radius,
+    }
+  }
+
   function spawnBlood(targetId: EntityId, attackerId: EntityId | '', amount: number): void {
     const target = engine?.world.ballById(targetId)
     if (!target) return
@@ -233,6 +272,15 @@ export function useVersusDuel(
     particles = particles.filter((p) => p.life > 0)
     for (const f of flashes) f.life -= dt
     flashes = flashes.filter((f) => f.life > 0)
+  }
+
+  function updateHitFlashes(dt: number): void {
+    for (const f of hitFlashes) f.life -= dt
+    hitFlashes = hitFlashes.filter((f) => f.life > 0)
+  }
+
+  function drawHitFlashes(ctx: CanvasRenderingContext2D): void {
+    for (const f of hitFlashes) drawSprite(ctx, f.spriteId, Math.round(f.x), Math.round(f.y), 1)
   }
 
   function drawParticles(ctx: CanvasRenderingContext2D): void {
@@ -416,6 +464,17 @@ export function useVersusDuel(
     if (!ctx) return
     ctx.imageSmoothingEnabled = false
 
+    // The canvas is the output resolution (Settings / recording, Req 15.8):
+    // letterbox it, then fit the arena centered at the largest whole-number
+    // scale (fractional only if the canvas is smaller than the arena).
+    const { width: aw, height: ah } = duel.arenaConfig
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.fillStyle = EDG.wall
+    ctx.fillRect(0, 0, el.width, el.height)
+    const fit = Math.min(el.width / aw, el.height / ah)
+    const scale = fit >= 1 ? Math.floor(fit) : fit
+    ctx.setTransform(scale, 0, 0, scale, Math.round((el.width - aw * scale) / 2), Math.round((el.height - ah * scale) / 2))
+
     clear(ctx)
     for (const e of engine.world.entities) {
       if (e.kind === 'ball' && e.alive) drawBall(ctx, e)
@@ -425,6 +484,7 @@ export function useVersusDuel(
       else if (e.kind === 'projectile' && e.alive) drawProjectile(ctx, e)
     }
     drawParticles(ctx)
+    drawHitFlashes(ctx)
     drawHpBars(ctx)
     if (opts?.showHitboxes) drawHitboxes(ctx)
 
@@ -442,16 +502,21 @@ export function useVersusDuel(
     const dt = (now - lastTime) / 1000
     lastTime = now
 
+    updateHitFlashes(dt) // real time, so the flash lasts HIT_FLASH even in a hit-stop
     if (hitStop > 0) {
       // Frozen on a hit: burn real time without advancing the simulation.
       hitStop -= dt
     } else {
-      // Whole steps for elapsed real time, scaled by sim speed (each step 1/60s).
-      acc += dt * speed
-      let steps = Math.floor(acc / TIMESTEP)
-      acc -= steps * TIMESTEP
-      const MAX = 10 // clamp to avoid spiral-of-death on tab resume
-      if (steps > MAX) steps = MAX
+      // Whole 1/60 s steps owed for elapsed real time × sim speed (Req 15.7).
+      acc += dt
+      let steps = stepsForElapsed(acc, speed)
+      acc -= (steps * TIMESTEP) / speed
+      // Clamp to avoid a spiral of death on tab resume (scaled for fast speeds).
+      const MAX = Math.max(10, Math.ceil(speed * 4))
+      if (steps > MAX) {
+        steps = MAX
+        acc = 0
+      }
       // Stop stepping as soon as a hit lands so the freeze shows the impact frame.
       for (let i = 0; i < steps && hitStop <= 0; i++) {
         snapshot()
@@ -465,7 +530,7 @@ export function useVersusDuel(
     syncHp()
     view.winner.value = engine.winner
     // Frozen (hit-stop): show the exact step pose, no blending.
-    const alpha = hitStop > 0 ? 1 : Math.min(1, acc / TIMESTEP)
+    const alpha = hitStop > 0 ? 1 : Math.min(1, (acc * speed) / TIMESTEP)
     renderInterpolated(alpha)
 
     raf = requestAnimationFrame(frame)
@@ -490,6 +555,7 @@ export function useVersusDuel(
     prev = new Map()
     particles = []
     flashes = []
+    hitFlashes = []
     raf = requestAnimationFrame(frame)
   }
 
