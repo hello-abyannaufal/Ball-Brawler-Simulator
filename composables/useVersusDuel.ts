@@ -410,7 +410,8 @@ export function useVersusDuel(
       for (let x = 0; x < width; x += tile) {
         const alt = ((x / tile + y / tile) & 1) === 0
         ctx.fillStyle = alt ? EDG.floor : EDG.floorAlt
-        ctx.fillRect(x, y, tile, tile)
+        // Edge tiles are trimmed: the arena needn't be a multiple of the tile size.
+        ctx.fillRect(x, y, Math.min(tile, width - x), Math.min(tile, height - y))
       }
     }
     // wall border
