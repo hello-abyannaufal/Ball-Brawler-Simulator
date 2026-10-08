@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { spinWheel, EmptyRegistryError, type WheelResult } from '~/engine/roulette'
 import { weaponRegistry } from '~/engine/weapons/registry'
+import { raceRegistry } from '~/engine/races/registry'
 import { SEED_MAX } from '~/engine/rng'
 import { useLibraryStore } from '~/stores/library'
 import { useRouletteStore, MAX_WEIGHT, type WheelKind } from '~/stores/roulette'
@@ -10,6 +11,7 @@ import type { BallConfig } from '~/engine/config'
 import type { WheelSlice } from '~/components/RouletteWheel.vue'
 import RouletteWheel from '~/components/RouletteWheel.vue'
 import '~/engine/weapons/index' // populate the registry
+import '~/engine/races/index'
 
 const SPIN_MS = 3500
 const NAME_MAX = 24
@@ -28,6 +30,12 @@ interface WheelEntry {
  * `WheelKind` — the wheel, weights, and flow need no other change.
  */
 const STEPS: { kind: WheelKind; label: string; entries: () => WheelEntry[] }[] = [
+  {
+    kind: 'race',
+    label: 'Race',
+    entries: () =>
+      raceRegistry.ids().map((id) => ({ id, name: raceRegistry.get(id)?.name ?? id })),
+  },
   {
     kind: 'weapon',
     label: 'Weapon',
@@ -122,8 +130,9 @@ function confirmStep(): void {
 function saveBall(): void {
   if (!result.value || !nameValid.value) return
   const all = { ...picks.value, [step.value.kind]: result.value }
+  const race = all.race
   const weapon = all.weapon
-  if (!weapon) return
+  if (!race || !weapon) return
   // Build a ball config carrying every drawn pick (Req 12.7).
   const config: BallConfig = {
     id: `roulette-${weapon.seed}`,
@@ -132,6 +141,7 @@ function saveBall(): void {
     initialPosition: { x: 0, y: 0 },
     initialVelocity: { x: 120, y: 0 },
     weapons: [{ weaponId: weapon.id }],
+    raceId: race.id, // supplies HP and radius
     appearance: { type: 'color', value: '#feae34' },
   }
   const seeds = Object.fromEntries(Object.entries(all).map(([k, r]) => [k, r.seed]))

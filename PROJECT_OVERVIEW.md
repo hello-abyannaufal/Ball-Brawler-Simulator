@@ -59,7 +59,7 @@ server/ (Nitro API: auth, requireUser, can()) ──► PostgreSQL (Drizzle)
    `performance.now()`, dan import Vue/Nuxt.
 2. **Single damage gateway**: semua perubahan HP lewat `applyDamage(...)` (`engine/damage.ts`).
    Damage source: `contact`, `weapon`, `projectile` (union bisa diperluas).
-3. **`engineVersion`** (`engine/engine.ts`, saat ini `1.1.0`) wajib di-bump bila perubahan
+3. **`engineVersion`** (`engine/engine.ts`, saat ini `1.2.0`) wajib di-bump bila perubahan
    bisa mengubah hasil duel (fisika, combat, stat weapon, RNG). Minor = balance, major = format.
 4. Tidak ada state per-frame di reactivity Vue; engine dibuat saat mount, dibuang saat unmount.
 5. Hitbox (data engine) terpisah dari sprite (visual). Engine tidak pernah membaca sprite.
@@ -67,12 +67,25 @@ server/ (Nitro API: auth, requireUser, can()) ──► PostgreSQL (Drizzle)
 
 ---
 
-## 2. Bola (default)
+## 2. Bola & Race
 
-| Atribut | Nilai |
+Stat tubuh bola berasal dari **race** (`BallConfig.raceId`, didefinisikan di `engine/races/`,
+diresolusi engine lewat `ballStats()` seperti weapon). Bola lama tanpa race memakai
+`maxHp`/`radius` dari config dengan multiplier netral (setara Human).
+
+| Race | maxHp | radius | speed | damageTaken | weaponSpin |
+|---|---|---|---|---|---|
+| Human | 100 | 32 | ×1.00 | ×1.00 | ×1.00 |
+| Elf | 85 | 28 | ×1.20 | ×1.00 | ×1.15 |
+| Orc | 115 | 36 | ×0.85 | ×1.00 | ×0.85 |
+
+- `speed` mengalikan kecepatan awal & `cruiseSpeed`; `damageTaken` mengalikan setiap damage
+  yang masuk (di `applyDamage`); `weaponSpin` mengalikan putaran semua weapon (termasuk ring
+  Shuriken dan sapuan bidik Bow, tapi bukan interval summon/tembak).
+- Tier 2 (Dwarf, Goblin, Giant) menyusul setelah Tier 1 stabil (task 26).
+
+| Atribut lain | Nilai |
 |---|---|
-| `radius` | 32 |
-| `maxHp` | 100 |
 | Kecepatan awal | ≈ 201 px/s (`hypot(180, 90)`), arah & posisi acak dari seed (`placeForDuel` di `utils/duel.ts`) |
 | `weapons` | 1 weapon dari Roulette (array, secara desain boleh 0+) |
 | `appearance` | warna / pattern / image (visual saja) |
@@ -153,6 +166,7 @@ Field opsional yang tersedia: `projectile`, `cannotBeParried`, `launchSpeed`, `r
 | Prioritas | Item | Catatan |
 |---|---|---|
 | Tinggi | **Balance pass lanjutan** (task 25.6) | Fokus ke matchup yang timpang & tidak tergantung seed, bukan hanya win rate rata-rata. |
+| Tinggi | **Balance race Tier 1** (task 26.2), lalu Tier 2 & tampilan race | Orc sedikit kuat, Elf lemah; sangat tergantung weapon (Shuriken, Bow). |
 | Tinggi | **Trait & Ability** (pengganti sistem Skill lama) | Lihat 4.2. |
 | Sedang | **UI Login / Register / Logout** (task 23.3) | API `/api/auth/*` sudah ada; butuh PostgreSQL jalan. |
 | Sedang | **Home page** (task 23.4) | Intro singkat + link ke Roulette & Versus. |
@@ -171,7 +185,7 @@ cocok untuk efek Ability.
 Urutan roda Roulette yang dituju:
 
 ```
-Weapon (✅ ada)  →  Trait (⏳)  →  Ability (⏳)  →  nama + Save
+Race (✅ ada)  →  Weapon (✅ ada)  →  Trait (⏳)  →  Ability (⏳)  →  nama + Save
 ```
 
 **Keputusan yang harus ditanyakan ke user sebelum implementasi** (jangan diasumsikan):

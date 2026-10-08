@@ -4,8 +4,10 @@ import { useLibraryStore, type SavedBall } from '~/stores/library'
 import { useSettingsStore, sanitizeSettings } from '~/stores/settings'
 import { usePersistenceError } from '~/stores/example'
 import { weaponRegistry } from '~/engine/weapons/registry'
+import { raceRegistry } from '~/engine/races/registry'
 import { buildExport, exportToJson, parseImport } from '~/utils/libraryIo'
 import '~/engine/weapons/index' // populate the registry
+import '~/engine/races/index'
 
 const library = useLibraryStore()
 const settings = useSettingsStore()
@@ -18,6 +20,19 @@ const error = ref('')
 function weaponNames(ball: SavedBall): string {
   const names = ball.config.weapons.map((w) => weaponRegistry.get(w.weaponId)?.name ?? `${w.weaponId} (unknown)`)
   return names.length ? names.join(', ') : 'No weapon'
+}
+
+/** Race name, or '' for balls saved before races. */
+function raceName(ball: SavedBall): string {
+  const id = ball.config.raceId
+  if (id === undefined) return ''
+  return raceRegistry.get(id)?.name ?? `${id} (unknown)`
+}
+
+/** The race supplies HP when set. */
+function maxHp(ball: SavedBall): number {
+  const id = ball.config.raceId
+  return (id !== undefined && raceRegistry.get(id)?.maxHp) || ball.config.maxHp
 }
 
 function ballColor(ball: SavedBall): string {
@@ -114,7 +129,10 @@ async function importJson(ev: Event): Promise<void> {
               {{ displayName(ball) }}
             </p>
             <p class="truncate text-xs text-gray-600">
-              {{ weaponNames(ball) }} · HP {{ ball.config.maxHp }}
+              <template v-if="raceName(ball)">
+                {{ raceName(ball) }} ·
+              </template>
+              {{ weaponNames(ball) }} · HP {{ maxHp(ball) }}
             </p>
           </div>
           <button

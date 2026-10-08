@@ -108,6 +108,12 @@ stores/ (Pinia, persisted to localStorage)       server/ (Nitro API)  ─► Pos
 3. Add its sprite to `public/sprites/weapons/<id>.png` and an entry in `assets/sprites/manifest.ts`; set `spriteId`, `pivot`, and `spriteReach` (sprite pixels from pivot to tip) so the drawn weapon matches its hitbox (check with *Show hitboxes* on `/versus`).
 4. It appears automatically on the roulette Weapon wheel.
 
+### Add a Race
+
+1. Create `engine/races/<id>.ts` exporting a `RaceDefinition` (`id`, `name`, `maxHp`, `radius`, and the multipliers `speed`, `damageTaken`, `weaponSpin`) and call `raceRegistry.register(def)`.
+2. Import it in `engine/races/index.ts`.
+3. It appears automatically on the roulette Race wheel. Bump `engineVersion`.
+
 ### Add a Damage_Source
 
 1. Add the tag to `DamageSourceTag` and `DAMAGE_SOURCE_TAGS` in `engine/damage.ts`.

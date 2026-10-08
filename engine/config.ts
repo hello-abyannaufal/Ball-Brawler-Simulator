@@ -21,6 +21,9 @@ export interface BallConfig {
   initialPosition: Vec2
   initialVelocity: Vec2
   weapons: WeaponRef[] // resolved against WeaponRegistry
+  /** Resolved against RaceRegistry; when set, the race's stats replace
+   *  `maxHp` and `radius`. Absent on balls saved before races (neutral stats). */
+  raceId?: string
   appearance?: BallAppearance // visual-only, renderer concern
 }
 

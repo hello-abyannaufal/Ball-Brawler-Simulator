@@ -10,6 +10,7 @@ import { useRecordingsStore } from '~/stores/recordings'
 import { useSettingsStore } from '~/stores/settings'
 import { useLibraryStore } from '~/stores/library'
 import { weaponRegistry } from '~/engine/weapons/registry'
+import { raceRegistry } from '~/engine/races/registry'
 import { defaultBalls, hpBarFraction, placeForDuel } from '~/utils/duel'
 import '~/engine/weapons/index' // populate the registry
 
@@ -23,14 +24,15 @@ interface Candidate {
   name: string
   source: 'default' | 'library'
   config: BallConfig
-  usable: boolean // false if it references a weapon this build doesn't have
+  usable: boolean // false if it references a weapon or race this build doesn't have
 }
 
 // Candidate balls: the built-in defaults plus everything saved in the Library
 // (e.g. from Roulette) (Req 11.1).
 const library = useLibraryStore()
 const candidates = computed<Candidate[]>(() => {
-  const usable = (c: BallConfig) => c.weapons.every((w) => weaponRegistry.has(w.weaponId))
+  const usable = (c: BallConfig) =>
+    c.weapons.every((w) => weaponRegistry.has(w.weaponId)) && (c.raceId === undefined || raceRegistry.has(c.raceId))
   return [
     ...defaultBalls().map((c) => ({ key: `default:${c.id}`, name: c.id, source: 'default' as const, config: c, usable: true })),
     ...library.balls.map((b) => ({
@@ -221,7 +223,7 @@ onBeforeUnmount(() => {
             />
             <span>{{ b.name }}</span>
             <span class="text-xs text-gray-500">
-              {{ !b.usable ? '(unknown weapon)' : b.source === 'library' ? '· Library' : '· Default' }}
+              {{ !b.usable ? '(unknown weapon or race)' : b.source === 'library' ? '· Library' : '· Default' }}
             </span>
           </label>
         </li>

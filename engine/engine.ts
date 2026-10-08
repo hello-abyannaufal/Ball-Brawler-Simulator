@@ -9,6 +9,7 @@ import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKn
 import { runStatusEffects } from './status'
 import { CooldownTable } from './cooldown'
 import { weaponRegistry } from './weapons/registry'
+import { ballStats } from './races/registry'
 import {
   weaponHitsBall,
   weaponsOverlap,
@@ -17,7 +18,7 @@ import {
   weaponTouchesCircle,
 } from './weapons/combat'
 
-export const engineVersion = '1.1.0' // non-empty string (Req 5.8)
+export const engineVersion = '1.2.0' // non-empty string (Req 5.8)
 export const TIMESTEP = 1 / 60 // seconds (Req 5.4)
 
 /** Knockback impulse magnitude applied on a weapon hit. */
@@ -73,17 +74,20 @@ export function createEngine(opts: EngineOptions): Engine {
       }
       return { def, state: {} }
     })
+    const stats = ballStats(bc) // race (or the config's own HP/radius)
 
     const ball: Ball = {
       id: world.allocateId(),
       kind: 'ball',
       position: { ...bc.initialPosition },
-      velocity: { ...bc.initialVelocity },
+      velocity: { x: bc.initialVelocity.x * stats.speed, y: bc.initialVelocity.y * stats.speed },
       alive: true,
-      radius: bc.radius,
-      hp: bc.maxHp,
-      maxHp: bc.maxHp,
-      cruiseSpeed: Math.hypot(bc.initialVelocity.x, bc.initialVelocity.y),
+      radius: stats.radius,
+      hp: stats.maxHp,
+      maxHp: stats.maxHp,
+      cruiseSpeed: Math.hypot(bc.initialVelocity.x, bc.initialVelocity.y) * stats.speed,
+      damageTaken: stats.damageTaken,
+      weaponSpin: stats.weaponSpin,
       weapons,
       statusEffects: [],
       slam: null,
@@ -206,7 +210,7 @@ export function createEngine(opts: EngineOptions): Engine {
       // (hammer head) sits at its far end.
       // Riposte spin burst: faster spin while the riposte is ready.
       const boost = w.riposteSteps > 0 ? (w.def.riposte?.spinBoost ?? 1) : 1
-      w.angle += w.angularSpeed * boost * TIMESTEP
+      w.angle += w.angularSpeed * boost * owner.weaponSpin * TIMESTEP
       if (w.stunSteps > 0) w.stunSteps -= 1
       if (w.riposteSteps > 0) w.riposteSteps -= 1
       const orbitRadius =

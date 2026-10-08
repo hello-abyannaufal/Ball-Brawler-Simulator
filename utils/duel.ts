@@ -1,6 +1,8 @@
 import type { BallConfig } from '~/engine/config'
 import type { Vec2 } from '~/engine/entities'
 import { createRng } from '~/engine/rng'
+import { ballStats } from '~/engine/races/registry'
+import '~/engine/races/index' // populate the registry
 
 /**
  * HP bar fill fraction, clamped to [0, 1] (Req 11.7). Pure.
@@ -29,6 +31,7 @@ export function defaultBalls(): BallConfig[] {
       initialPosition: { x: 140, y: 180 },
       initialVelocity: { x: 180, y: 90 },
       weapons: [{ weaponId: 'sword' }],
+      raceId: 'human',
       appearance: { type: 'color', value: '#e43b44' },
     },
     {
@@ -38,6 +41,7 @@ export function defaultBalls(): BallConfig[] {
       initialPosition: { x: 220, y: 180 },
       initialVelocity: { x: -180, y: -90 },
       weapons: [{ weaponId: 'spear' }],
+      raceId: 'human',
       appearance: { type: 'color', value: '#0099db' },
     },
   ]
@@ -80,7 +84,7 @@ export function placeForDuel(
   const minGap = Math.min(arena.width, arena.height) * MIN_START_GAP
   const spots: Vec2[] = []
   const placed = configs.map((c): BallConfig => {
-    const margin = c.radius + 8
+    const margin = ballStats(c).radius + 8
     let pos: Vec2 = { x: arena.width / 2, y: arena.height / 2 }
     // Rejection-sample a spot far enough from the others (bounded tries).
     for (let tries = 0; tries < 200; tries++) {

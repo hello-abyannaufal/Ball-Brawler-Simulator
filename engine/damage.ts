@@ -67,6 +67,7 @@ const VALID_TAGS = new Set<DamageSourceTag>(DAMAGE_SOURCE_TAGS)
  * - empty attackerId allowed (Req 6.7)
  * - summonOwnerId set: credited attacker = owner (Req 6.8)
  * - isReflected set: applies once, triggers no further reflection (Req 6.9)
+ * - amount is scaled by the target's `damageTaken` (race) before applying
  * - positive application: emits exactly one `damage` event (Req 6.10)
  * - HP reaches <= 0: clamps to 0, marks dead, emits exactly one `ballDied` (Req 6.11)
  */
@@ -96,9 +97,11 @@ export function applyDamage(
       ? input.flags.summonOwnerId
       : input.attackerId
 
+  // The target's race scales every incoming hit, whatever its source.
+  const amount = input.amount * target.damageTaken
   const before = target.hp
-  const applied = Math.min(before, input.amount)
-  target.hp = before - input.amount
+  const applied = Math.min(before, amount)
+  target.hp = before - amount
 
   // Emit exactly one damage event for the positive application (Req 6.10).
   world.emit({

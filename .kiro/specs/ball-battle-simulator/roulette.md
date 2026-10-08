@@ -9,7 +9,7 @@ cara menambah roda baru, dan rencana jangka panjangnya. Requirement formal ada d
 ## 1. Ringkasan
 
 Roulette membuat sebuah **bola** dengan cara mengundi isinya lewat beberapa **roda**
-secara berurutan. Saat ini hanya ada satu roda: **Weapon**.
+secara berurutan. Saat ini ada dua roda: **Race** lalu **Weapon**.
 
 - Roda berbentuk pixel-art, luas tiap irisan sebanding dengan **bobot** (bisa diatur user).
 - Hasil undian ditentukan **seketika dan deterministik** dari sebuah seed; animasi roda
@@ -36,8 +36,8 @@ Aturan:
 4. Penanda tahap di atas roda menunjukkan tahap aktif dan hasil tahap yang sudah dikunci (✓).
 5. Slider peluang di bawah roda selalu milik roda **tahap aktif**.
 
-> Saat ini hanya ada tahap Weapon, jadi Weapon sekaligus tahap terakhir: setelah spin
-> langsung muncul input nama + Save (tombol Confirm belum terlihat).
+> Saat ini tahapnya Race → Weapon: Race punya tombol Confirm, Weapon adalah tahap terakhir
+> (input nama + Save).
 
 ---
 
@@ -82,8 +82,8 @@ Aturan:
 SavedBall {
   id: string
   name: string                    // nama dari input user
-  config: BallConfig              // weapons: [{ weaponId }], radius, hp, dll.
-  seeds?: Record<string, number>  // satu seed per tahap, mis. { weapon: 123456 }
+  config: BallConfig              // raceId, weapons: [{ weaponId }], appearance, dll.
+  seeds?: Record<string, number>  // satu seed per tahap, mis. { race: 42, weapon: 123456 }
 }
 ```
 
@@ -115,11 +115,12 @@ Roda, slider peluang, Confirm, dan Save tidak perlu diubah.
 ### 5.1 Urutan roda yang dituju
 
 ```
-Weapon  →  Trait  →  Ability  →  (nama + Save)
+Race  →  Weapon  →  Trait  →  Ability  →  (nama + Save)
 ```
 
 | Roda | Isi | Status |
 |---|---|---|
+| Race | Tubuh bola: HP, radius, speed, damageTaken, weaponSpin (`engine/races/`) | ✅ ada (Tier 1: Human, Elf, Orc) |
 | Weapon | Senjata (sword, spear, hammer, bow, shuriken, …) | ✅ ada |
 | Trait | Efek **pasif** (mis. vampiric, regen, spike) | ⏳ belum ada sistemnya |
 | Ability | Skill **aktif** dengan cooldown (mis. dash, invisibility) | ⏳ belum ada sistemnya |
