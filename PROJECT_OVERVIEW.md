@@ -118,6 +118,8 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 - **Hammer — Heavy blow** : `cannotBeParried`; hit melempar bola lawan dengan
   `launchSpeed: 540`; `reboundOnHit` (spin berbalik setelah kena); **Wall slam**: jika bola
   yang terkena menabrak dinding dalam 45 step (0.75 s) → +6 damage.
+  Visual (renderer saja): hit-stop lebih lama saat kontak (0.2 s), dan wall slam memunculkan
+  shockwave abu-abu dari titik kontak dinding yang melebar sambil menipis sampai hilang.
 - **Spear — Tip strike** (`tipStrike`): hit di **20% ujung** tombak → damage **×2**.
 - **Bow — Projectile**: menembak panah (speed 320, radius 4, damage 7) tiap 100 step,
   hanya jika mengarah ±5° ke lawan; arah dibidik dengan *lead* ke posisi lawan berikutnya.

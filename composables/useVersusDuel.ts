@@ -42,6 +42,15 @@ const EDG = {
 /** Hit-stop: real-time seconds the simulation freezes after a damage event.
  *  Render-only (the engine just isn't stepped), so determinism is unaffected. */
 const HIT_STOP = 0.08
+/** Heavy weapons (those with a wall slam, e.g. Hammer) freeze longer on contact. */
+const HEAVY_HIT_STOP = 0.2
+
+/** Wall-slam shockwave: a gray ring from the wall contact that widens while its
+ *  border thins out to nothing. Render-only, clipped to the arena. */
+const SHOCKWAVE_LIFE = 0.45 // seconds
+const SHOCKWAVE_RADIUS = 56 // arena px at the end
+const SHOCKWAVE_WIDTH = 5 // border px at the start
+const SHOCKWAVE_COLOR = '#8b9bb4'
 
 /** Blood burst on damage: chunky square pixels, render-only (Math.random is
  *  fine here, it never feeds back into the engine). */
@@ -87,6 +96,12 @@ interface Flash {
   x: number
   y: number
   life: number
+}
+
+interface Shockwave {
+  x: number
+  y: number
+  life: number // seconds remaining
 }
 
 interface HitFlash {
@@ -137,6 +152,7 @@ export function useVersusDuel(
   let particles: Particle[] = []
   let flashes: Flash[] = []
   let hitFlashes: HitFlash[] = []
+  let shockwaves: Shockwave[] = []
   // Set by a `wallSlam` event; the damage event that follows uses its point.
   let pendingSlam: { ballId: EntityId; x: number; y: number } | null = null
   // Entity state before the latest step, for render interpolation.
@@ -152,6 +168,7 @@ export function useVersusDuel(
         view.lastEvent.value = e
         if (e.type === 'wallSlam') {
           pendingSlam = { ballId: e.ballId, x: e.x, y: e.y }
+          if (!reduced) shockwaves.push({ x: e.x, y: e.y, life: SHOCKWAVE_LIFE })
           return
         }
         if (e.type === 'damage' && e.amount > 0) {
@@ -162,8 +179,10 @@ export function useVersusDuel(
           const crit = e.style === 'critical'
           if (sprite && at) hitFlashes.push({ ...at, life: HIT_FLASH, spriteId: sprite, scale: crit ? 2 : 1 })
           if (reduced) return // decorative motion off; flash above still shows
-          // Slams and criticals (riposte, spear tip) land harder.
-          hitStop = slam || crit ? HIT_STOP * 1.5 : HIT_STOP
+          // Heavy contact (Hammer) freezes longest; slams and criticals
+          // (riposte, spear tip) land harder than a plain hit.
+          const heavy = !slam && e.source.tag === 'weapon' && isHeavyAttacker(e.attackerId)
+          hitStop = heavy ? HEAVY_HIT_STOP : slam || crit ? HIT_STOP * 1.5 : HIT_STOP
           spawnBlood(e.targetId, e.attackerId, crit ? e.amount * 2 : e.amount, slam ?? undefined)
         } else if (e.type === 'projectileBlocked') {
           if (reduced) return
@@ -181,6 +200,13 @@ export function useVersusDuel(
     })
     view.winner.value = undefined
     syncHp()
+  }
+
+  /** Does the attacker wield a heavy (wall-slamming) weapon? */
+  function isHeavyAttacker(attackerId: EntityId | ''): boolean {
+    return !!engine?.world.entities.some(
+      (w) => w.kind === 'weapon' && w.alive && w.ownerId === attackerId && !!w.def.wallSlam,
+    )
   }
 
   function syncHp(): void {
@@ -323,6 +349,36 @@ export function useVersusDuel(
   function updateHitFlashes(dt: number): void {
     for (const f of hitFlashes) f.life -= dt
     hitFlashes = hitFlashes.filter((f) => f.life > 0)
+    for (const w of shockwaves) w.life -= dt
+    shockwaves = shockwaves.filter((w) => w.life > 0)
+  }
+
+  /** Pixel ring per shockwave: radius grows, border thins to 0, clipped to the arena. */
+  function drawShockwaves(ctx: CanvasRenderingContext2D): void {
+    if (shockwaves.length === 0) return
+    const { width, height } = duel.arenaConfig
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(0, 0, width, height)
+    ctx.clip()
+    ctx.fillStyle = SHOCKWAVE_COLOR
+    for (const w of shockwaves) {
+      const t = 1 - w.life / SHOCKWAVE_LIFE // 0 → 1
+      const outer = 4 + (SHOCKWAVE_RADIUS - 4) * Math.sqrt(t) // fast start, eases out
+      const thick = SHOCKWAVE_WIDTH * (1 - t)
+      if (thick < 0.5) continue
+      const inner = outer - thick
+      const cx = Math.round(w.x)
+      const cy = Math.round(w.y)
+      const r = Math.ceil(outer)
+      for (let dy = -r; dy <= r; dy++) {
+        for (let dx = -r; dx <= r; dx++) {
+          const d = Math.hypot(dx + 0.5, dy + 0.5)
+          if (d <= outer && d >= inner) ctx.fillRect(cx + dx, cy + dy, 1, 1)
+        }
+      }
+    }
+    ctx.restore()
   }
 
   function drawHitFlashes(ctx: CanvasRenderingContext2D): void {
@@ -599,6 +655,7 @@ export function useVersusDuel(
       if (e.kind === 'weapon' && e.alive) drawWeapon(ctx, e)
       else if (e.kind === 'projectile' && e.alive) drawProjectile(ctx, e)
     }
+    drawShockwaves(ctx)
     drawParticles(ctx)
     drawHitFlashes(ctx)
     drawHpBars(ctx)
@@ -673,6 +730,7 @@ export function useVersusDuel(
     particles = []
     flashes = []
     hitFlashes = []
+    shockwaves = []
     pendingSlam = null
     raf = requestAnimationFrame(frame)
   }
