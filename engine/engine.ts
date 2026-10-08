@@ -18,7 +18,7 @@ import {
   weaponTouchesCircle,
 } from './weapons/combat'
 
-export const engineVersion = '1.2.0' // non-empty string (Req 5.8)
+export const engineVersion = '1.3.0' // non-empty string (Req 5.8)
 export const TIMESTEP = 1 / 60 // seconds (Req 5.4)
 
 /** Knockback impulse magnitude applied on a weapon hit. */
@@ -111,6 +111,7 @@ export function createEngine(opts: EngineOptions): Engine {
         angularSpeed: slot % 2 === 0 ? inst.def.angularSpeed : -inst.def.angularSpeed,
         stunSteps: 0,
         riposteSteps: 0,
+        reapSteps: 0,
         hitbox: inst.def.hitbox,
       }
       world.add(we)
@@ -208,11 +209,23 @@ export function createEngine(opts: EngineOptions): Engine {
       // is knocked into reverse spin). The weapon spans [surface, surface +
       // length]: a segment hitbox is centered on that span, a circle hitbox
       // (hammer head) sits at its far end.
-      // Riposte spin burst: faster spin while the riposte is ready.
-      const boost = w.riposteSteps > 0 ? (w.def.riposte?.spinBoost ?? 1) : 1
+      // Spin bursts: faster spin while a riposte is ready or a reap runs.
+      const boost =
+        w.riposteSteps > 0 ? (w.def.riposte?.spinBoost ?? 1)
+        : w.reapSteps > 0 ? (w.def.reap?.spinBoost ?? 1)
+        : 1
       w.angle += w.angularSpeed * boost * owner.weaponSpin * TIMESTEP
       if (w.stunSteps > 0) w.stunSteps -= 1
       if (w.riposteSteps > 0) w.riposteSteps -= 1
+      if (w.reapSteps > 0) {
+        w.reapSteps -= 1
+        // Reap over: every opponent is safe for the normal hitCooldown, so a
+        // new reap can't chain straight on.
+        if (w.reapSteps === 0) {
+          const full = Math.round(w.def.hitCooldown / 1000 / TIMESTEP)
+          for (const b of world.aliveBalls()) if (b.id !== w.ownerId) cooldowns.start(w.id, b.id, full)
+        }
+      }
       const orbitRadius =
         w.hitbox.shape === 'circle'
           ? owner.radius + w.def.length - w.hitbox.radius
@@ -457,9 +470,18 @@ export function createEngine(opts: EngineOptions): Engine {
           ...(mult > 1 ? { flags: { style: 'critical' as const } } : {}),
         })
         if (outcome.kind === 'applied') {
-          cooldowns.start(w.id, ball.id, Math.round(w.def.hitCooldown / 1000 / TIMESTEP))
+          const reap = w.def.reap
+          const reaping = !!reap && w.reapSteps > 0
+          if (reap) {
+            // Rapid re-hits while the reap lasts (it ends with a full cooldown).
+            if (!reaping) w.reapSteps = reap.windowSteps
+            cooldowns.start(w.id, ball.id, reap.hitCooldownSteps)
+          } else {
+            cooldowns.start(w.id, ball.id, Math.round(w.def.hitCooldown / 1000 / TIMESTEP))
+          }
+          // Reaping blades don't push the ball away, so they keep cutting.
           if (w.def.launchSpeed) launchAway(owner, ball, w.def.launchSpeed)
-          else applyKnockback(owner, ball, HIT_KNOCKBACK)
+          else if (!reap) applyKnockback(owner, ball, HIT_KNOCKBACK)
           if (w.def.reboundOnHit) w.angularSpeed = -w.angularSpeed
           if (w.def.wallSlam && ball.alive) {
             ball.slam = { attackerId: owner.id, damage: w.def.wallSlam.damage, steps: w.def.wallSlam.windowSteps }

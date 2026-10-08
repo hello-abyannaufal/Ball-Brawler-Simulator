@@ -52,6 +52,7 @@ export interface WeaponEntity extends BaseEntity {
   angularSpeed: number // runtime spin speed; starts from def, flips on clash
   stunSteps: number // >0 after being disarmed: no damage until it reaches 0
   riposteSteps: number // >0 while a riposte (boosted next hit) is ready
+  reapSteps: number // >0 while a reap (fast spin, rapid re-hits) is running
   hitbox: Hitbox // resolved world-space hitbox this step
 }
 

@@ -47,6 +47,15 @@ export interface WeaponDefinition {
     readonly spinBoost?: number
     readonly reflectProjectiles?: boolean
   }
+  /** Scythe: a hit starts a reap for `windowSteps`: the blade spins
+   *  `spinBoost` × faster and can hit the same ball again every
+   *  `hitCooldownSteps`, without knockback, so it keeps cutting. Once the reap
+   *  ends, that ball is safe for the normal hitCooldown before the next one. */
+  readonly reap?: {
+    readonly windowSteps: number
+    readonly spinBoost: number
+    readonly hitCooldownSteps: number
+  }
   /** Spear (segment hitbox): a hit landing in the outer `fraction` of the blade
    *  deals `multiplier` × damage. */
   readonly tipStrike?: { readonly fraction: number; readonly multiplier: number }

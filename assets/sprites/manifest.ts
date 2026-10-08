@@ -171,6 +171,7 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'weapon:spear': { kind: 'image', src: '/sprites/weapons/spear.png', width: SIZE_SPEAR_W, height: SIZE_SPEAR_H },
   'weapon:shuriken': { kind: 'image', src: '/sprites/weapons/shuriken.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:bow': { kind: 'image', src: '/sprites/weapons/bow.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
+  'weapon:scythe': { kind: 'image', src: '/sprites/weapons/scythe.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
 
   // Projectiles — procedural until PNGs exist.
   'projectile:arrow': { kind: 'procedural', width: 12, height: 5, draw: arrowProc },
@@ -186,6 +187,7 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'icon:weapon:spear': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
   'icon:weapon:shuriken': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: shurikenProc },
   'icon:weapon:bow': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
+  'icon:weapon:scythe': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
 
   // Weapon procedural fallbacks are also exposed under *:proc ids so the
   // renderer can prefer them if an image fails to load.

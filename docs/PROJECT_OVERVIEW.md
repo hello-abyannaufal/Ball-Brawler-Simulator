@@ -59,7 +59,7 @@ server/ (Nitro API: auth, requireUser, can()) ──► PostgreSQL (Drizzle)
    `performance.now()`, dan import Vue/Nuxt.
 2. **Single damage gateway**: semua perubahan HP lewat `applyDamage(...)` (`engine/damage.ts`).
    Damage source: `contact`, `weapon`, `projectile` (union bisa diperluas).
-3. **`engineVersion`** (`engine/engine.ts`, saat ini `1.2.0`) wajib di-bump bila perubahan
+3. **`engineVersion`** (`engine/engine.ts`, saat ini `1.3.0`) wajib di-bump bila perubahan
    bisa mengubah hasil duel (fisika, combat, stat weapon, RNG). Minor = balance, major = format.
 4. Tidak ada state per-frame di reactivity Vue; engine dibuat saat mount, dibuang saat unmount.
 5. Hitbox (data engine) terpisah dari sprite (visual). Engine tidak pernah membaca sprite.
@@ -108,6 +108,7 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 | **Spear** | 72 | 6 | 3.0 | 8 | 600 | segment 72 × 8 |
 | **Bow** | 24 | 0 (lewat panah) | 2.8 | 5 | 400 | segment 24 × 8 |
 | **Shuriken** | 1 (tanpa bilah) | 0 (lewat shuriken) | 3.0 | 6 | 0 | circle r0.5 (dummy) |
+| **Scythe** | 46 | 6 | 3.6 | 15 | 800 | circle r14 (bilah) |
 
 ### 3.2 Skill unik per weapon
 
@@ -129,6 +130,12 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
   3 damage lalu pecah saat menyentuh bola lawan; pecah bila disentuh weapon lawan; menahan
   proyektil lawan. Saat 5 terkumpul → dilempar kipas 45° ke lawan (speed 300, 4 damage tiap
   shuriken, sekali hit), memantul di dinding selama 120 step (2 s).
+- **Scythe — Reap** (`reap`): hit memulai reap selama **60 step (1 s)**: bilah berputar **10×**
+  lebih cepat dan bisa mengenai bola yang sama lagi tiap **4 step**. Hit scythe tidak memberi
+  knockback (bilah terus memotong). Setelah reap selesai, lawan aman selama hit cooldown normal
+  (800 ms), jadi reap tidak bisa berantai. Rata-rata ≈ 2.2 hit per reap (maks ≈ 7); win rate
+  46% (20 seed × kedua slot vs 5 weapon lain), lemah vs Bow (15%). Renderer: swing trail abu-abu
+  selama reap.
 
 ### 3.3 Aturan combat umum
 
@@ -157,7 +164,7 @@ Perubahan kecil bisa membalik seluruh matchup — ukur ulang setelah tiap peruba
 4. Otomatis muncul di roda Roulette. Bump `engineVersion`.
 
 Field opsional yang tersedia: `projectile`, `cannotBeParried`, `launchSpeed`, `reboundOnHit`,
-`wallSlam`, `riposte`, `tipStrike`, `summon`, `projectileBlockable` (lihat `engine/weapons/types.ts`).
+`wallSlam`, `riposte`, `reap`, `tipStrike`, `summon`, `projectileBlockable` (lihat `engine/weapons/types.ts`).
 
 ---
 

@@ -61,6 +61,7 @@ backgrounds). Do not introduce other hues.
   | hammer         | 32×32  | (5, 16)      | end of the handle                |
   | spear          | 48×12  | (6, 6)       | near the butt of the shaft       |
   | bow            | 32×32  | (19, 16)     | the grip at the middle of the bow |
+  | scythe         | 32×32  | (5, 12)      | above the shaft, so the tip hitbox sits on the blade |
   | orbiting-blade | 32×32  | (16, 16)     | canvas center (spins in place)   |
 
 ### Spritesheet rules
@@ -116,7 +117,7 @@ them visually distinct so users can tell them apart in one row:
 
 ```
 public/sprites/
-  weapons/   sword.png hammer.png spear.png orbiting-blade.png bow.png
+  weapons/   sword.png hammer.png spear.png orbiting-blade.png bow.png scythe.png
   projectiles/ arrow.png blaster-shot.png
   fx/        hit-contact.png hit-weapon.png hit-projectile.png
   icons/
@@ -148,6 +149,7 @@ in the engine, not the sprite). Tune art to these:
 | spear          | held  | segment 40×3      | (6, 6)   | very long thin shaft, fills the 48px length   |
 | orbiting-blade | orbit | circle r=6        | (16, 16) | compact blade ~12px, spins around owner       |
 | bow            | held  | segment 16×2      | (19, 16) | bow body ~16px; damage comes from its arrow   |
+| scythe         | orbit | circle r=14       | (5, 12)  | curved blade at the tip, curling back over the shaft; reach 25px |
 
 ---
 
@@ -175,6 +177,11 @@ Global Rules in mind for all of them.
    right (+x, toward the target), taut string on the left (archer side),
    wooden limbs with a grip at the pivot (19, 16), ~16px tall on 32×32
    transparent, hard edges, limited palette."
+5b. **scythe.png** (done, drawn in code) — "16-bit pixel-art scythe, side view,
+   long wooden shaft pointing right with a purple grip wrap, a crescent steel
+   blade at the tip curling up and back toward the handle, bright cutting edge
+   on the inner curve, 32×32 transparent (pivot (5, 12)), hard edges,
+   Endesga 32 palette."
 
 ### Projectiles (8×8), transparent, forward = right
 

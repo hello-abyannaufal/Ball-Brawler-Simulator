@@ -72,6 +72,8 @@ const CLASH_HIT_STOP = 0.05
  *  poses. Colors go newest → oldest. */
 const RIPOSTE_TRAIL_STEPS = 6
 const RIPOSTE_TRAIL_COLORS = ['#ffffff', '#fee761', '#feae34', '#f77622']
+/** Scythe reap: the same swing trail in steel tones. */
+const REAP_TRAIL_COLORS = ['#ffffff', '#c0cbdc', '#8b9bb4', '#5a6988']
 const RIPOSTE_TRAIL_INNER = 0.35 // trail covers the blade from 35% of its length to the tip
 
 /** Per-source hit-flash (Req 16.5, 16.6): a 32×32 pixel sprite at the impact,
@@ -422,7 +424,7 @@ export function useVersusDuel(
         angle: e.kind === 'weapon' ? e.angle : 0,
       })
       if (e.kind !== 'weapon') continue
-      if (e.riposteSteps <= 0 || !e.alive) {
+      if ((e.riposteSteps <= 0 && e.reapSteps <= 0) || !e.alive) {
         trails.delete(e.id)
         continue
       }
@@ -514,7 +516,8 @@ export function useVersusDuel(
     // Scale so the drawn grip→tip span equals the engine's weapon length:
     // what you see is exactly the hitbox.
     const scale = w.def.spriteReach ? w.def.length / w.def.spriteReach : 2
-    if (w.riposteSteps > 0) drawRiposteTrail(ctx, w, anchor)
+    if (w.riposteSteps > 0) drawRiposteTrail(ctx, w, anchor, RIPOSTE_TRAIL_COLORS)
+    else if (w.reapSteps > 0) drawRiposteTrail(ctx, w, anchor, REAP_TRAIL_COLORS)
     drawSprite(ctx, spriteId, anchor.x, anchor.y, scale, w.angle, w.def.pivot)
   }
 
@@ -535,7 +538,12 @@ export function useVersusDuel(
    * of the blade between its current pose and its poses before the last few
    * steps, fading and cooling (white → orange) with age. Render-only.
    */
-  function drawRiposteTrail(ctx: CanvasRenderingContext2D, w: WeaponEntity, head: { x: number; y: number }): void {
+  function drawRiposteTrail(
+    ctx: CanvasRenderingContext2D,
+    w: WeaponEntity,
+    head: { x: number; y: number },
+    colors: readonly string[],
+  ): void {
     const history = trails.get(w.id)
     if (!history?.length) return
     const poses = [{ ...head, angle: w.angle }, ...[...history].reverse()] // newest first
@@ -548,7 +556,7 @@ export function useVersusDuel(
       // Shortest way round, so a wrap at ±π doesn't sweep the whole circle.
       const span = Math.atan2(Math.sin(b.angle - a.angle), Math.cos(b.angle - a.angle))
       const n = Math.max(1, Math.ceil(Math.abs(span) / dTheta))
-      ctx.fillStyle = RIPOSTE_TRAIL_COLORS[Math.min(i, RIPOSTE_TRAIL_COLORS.length - 1)]!
+      ctx.fillStyle = colors[Math.min(i, colors.length - 1)]!
       for (let s = 0; s < n; s++) {
         const t = s / n
         const age = (i + t) / (poses.length - 1) // 0 = newest, 1 = oldest

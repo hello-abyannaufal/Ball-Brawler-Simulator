@@ -1,9 +1,10 @@
-// Importing this module registers all five starter weapons as a side effect.
+// Importing this module registers all starter weapons as a side effect.
 export { sword } from './sword'
 export { hammer } from './hammer'
 export { spear } from './spear'
 export { shuriken } from './shuriken'
 export { bow } from './bow'
+export { scythe } from './scythe'
 
 export { weaponRegistry, WeaponRegistry } from './registry'
 export type {
