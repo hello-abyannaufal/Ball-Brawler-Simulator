@@ -51,8 +51,8 @@ backgrounds). Do not introduce other hues.
   the grip there or the weapon appears pushed forward by half its length.
 - **Anchor point (orbit weapons):** draw at `WeaponEntity.position` (the
   orbiting center) with pivot `(16, 16)`.
-- Pivots live on `WeaponDefinition.pivot` (optional, render-only; see
-  tasks.md 16.0b). If a pivot is missing, use the default left-middle.
+- Pivots live on `WeaponDefinition.pivot` (optional, render-only). If a pivot
+  is missing, use the default left-middle.
 - **Per-weapon pivots** (these override the default):
 
   | Weapon         | Canvas | Pivot (x, y) | Where                            |

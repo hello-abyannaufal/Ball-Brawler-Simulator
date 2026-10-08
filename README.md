@@ -90,7 +90,7 @@ stores/ (Pinia, persisted to localStorage)       server/ (Nitro API)  ─► Pos
 | --- | --- |
 | `engine/` | Framework-free simulation. `createEngine(config)` builds a `World`; `step()` runs one fixed 1/60 s step: move → collide → weapon clashes → damage + knockback → status effects → win check. Emits `EngineEvent`s (`damage`, `weaponClash`, `ballDied`, `matchEnded`). No Vue/Nuxt imports, no `Math.random()`, no wall-clock. |
 | `engine/weapons/` | One `WeaponDefinition` per file, validated and registered in `weaponRegistry`. Hitbox geometry lives here (`combat.ts`). |
-| `engine/roulette.ts` | `spinWheel(seed, segments)`: seeded, weighted draw. See `.kiro/specs/ball-battle-simulator/roulette.md`. |
+| `engine/roulette.ts` | `spinWheel(seed, segments)`: seeded, weighted draw. See `docs/ROULETTE.md`. |
 | `composables/useVersusDuel.ts` | Client driver: rAF loop (steps owed = real time × speed), interpolated rendering, hit-stop, particles, hit-flashes. Reads engine state; never writes it. |
 | `composables/useAudio.ts`, `useRecorder.ts` | Synthesized sounds per event; canvas + audio capture to WebM. |
 | `components/RouletteWheel.vue` | Pixel-art wheel, purely visual (lands on a result decided by the engine). |
@@ -123,9 +123,9 @@ stores/ (Pinia, persisted to localStorage)       server/ (Nitro API)  ─► Pos
 
 ### Add a Skill (Trait / Ability)
 
-The original skill system was removed for now (task 16.8; code in commit `548a969`). It is planned to return as **Traits** (passive, on a ball or a weapon) and **Abilities** (active, with a cooldown). Until then:
+The original skill system was removed for now (code in commit `548a969`). It is planned to return as **Traits** (passive, on a ball or a weapon) and **Abilities** (active, with a cooldown). Until then:
 
-1. Agree the design first (targets, slots, compatibility, Ability triggers) — see `.kiro/specs/ball-battle-simulator/roulette.md` §5.
+1. Agree the design first (targets, slots, compatibility, Ability triggers) — see `docs/ROULETTE.md` §5.
 2. Add the definitions + registry under `engine/` (the old `engine/skills/registry.ts` + hook calls in `engine.ts` are the reference pattern; keep hooks deterministic).
 3. Add a field to `BallConfig` and resolve it in `createEngine`.
 4. Add a roulette step: a `WheelKind` in `stores/roulette.ts` and an entry in `STEPS` in `pages/roulette.vue`; map the pick in `saveBall()`.

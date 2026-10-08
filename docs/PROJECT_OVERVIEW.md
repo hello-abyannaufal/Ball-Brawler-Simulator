@@ -82,7 +82,7 @@ diresolusi engine lewat `ballStats()` seperti weapon). Bola lama tanpa race mema
 - `speed` mengalikan kecepatan awal & `cruiseSpeed`; `damageTaken` mengalikan setiap damage
   yang masuk (di `applyDamage`); `weaponSpin` mengalikan putaran semua weapon (termasuk ring
   Shuriken dan sapuan bidik Bow, tapi bukan interval summon/tembak).
-- Tier 2 (Dwarf, Goblin, Giant) menyusul setelah Tier 1 stabil (task 26).
+- Tier 2 (Dwarf, Goblin, Giant) menyusul setelah Tier 1 stabil.
 
 | Atribut lain | Nilai |
 |---|---|
@@ -141,7 +141,7 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 - Hit weapon memberi knockback dasar 50 (Hammer memakai `launchSpeed`); clash knockback 120.
 - **Hit cooldown** per pasangan attacker–target, agar satu ayunan tidak kena tiap frame.
 
-### 3.4 Status balance terakhir (task 25.6)
+### 3.4 Status balance terakhir
 
 Win rate (engine 1.1.0, 20 seed × kedua slot, batas 90 s): Sword 62%, Hammer 68%, Spear 44%,
 Shuriken 33%, Bow 43%. **Matchup individual masih timpang** (mis. Hammer 75% vs Sword,
@@ -167,19 +167,19 @@ Field opsional yang tersedia: `projectile`, `cannotBeParried`, `launchSpeed`, `r
 
 | Prioritas | Item | Catatan |
 |---|---|---|
-| Tinggi | **Balance pass lanjutan** (task 25.6) | Fokus ke matchup yang timpang & tidak tergantung seed, bukan hanya win rate rata-rata. |
-| Tinggi | **Balance race Tier 1** (task 26.2), lalu Tier 2 & tampilan race | Orc sedikit kuat, Elf lemah; sangat tergantung weapon (Shuriken, Bow). |
+| Tinggi | **Balance pass lanjutan** | Fokus ke matchup yang timpang & tidak tergantung seed, bukan hanya win rate rata-rata. |
+| Tinggi | **Balance race Tier 1**, lalu Tier 2 & tampilan race | Orc sedikit kuat, Elf lemah; sangat tergantung weapon (Shuriken, Bow). |
 | Tinggi | **Trait & Ability** (pengganti sistem Skill lama) | Lihat 4.2. |
-| Sedang | **UI Login / Register / Logout** (task 23.3) | API `/api/auth/*` sudah ada; butuh PostgreSQL jalan. |
-| Sedang | **Home page** (task 23.4) | Intro singkat + link ke Roulette & Versus. |
-| Sedang | **Final checkpoint** (task 22) | Semua test lolos + cek manual roulette, FX versus, settings, recording. |
-| Rendah | Test opsional (`*` di `tasks.md`) | Banyak property test belum dibuat, mis. 17.2 reproducibility roulette, 17.6 unit roulette + library. |
+| Sedang | **UI Login / Register / Logout** | API `/api/auth/*` sudah ada; butuh PostgreSQL jalan. |
+| Sedang | **Home page** | Intro singkat + link ke Roulette & Versus. |
+| Sedang | **Final checkpoint** | Semua test lolos + cek manual roulette, FX versus, settings, recording. |
+| Rendah | Test opsional | Banyak property test belum dibuat, mis. reproducibility roulette, unit roulette + library. |
 
 ### 4.2 Trait & Ability (fitur besar berikutnya)
 
 Penamaan sudah dikonfirmasi user: **Trait = efek pasif** (ke ball atau weapon),
 **Ability = skill aktif dengan cooldown**. Istilah "Skill" lama tidak dipakai lagi.
-Sistem skill lama (Vampire, Spike, Blaster, Splitter, Grower) **sudah dihapus** (task 16.8);
+Sistem skill lama (Vampire, Spike, Blaster, Splitter, Grower) **sudah dihapus**;
 kodenya di commit `548a969` bisa jadi referensi pola hook (`onTick`, `onHit`, `onHurt`,
 `onWallBounce`, `onDeath`). `engine/status.ts` (status effect berdurasi) masih ada dan
 cocok untuk efek Ability.
@@ -213,11 +213,8 @@ Race (✅ ada)  →  Weapon (✅ ada)  →  Trait (⏳)  →  Ability (⏳)  →
 |---|---|
 | `README.md` | Setup lokal, arsitektur, cara extend (weapon, damage source, trait/ability), determinism, roles. |
 | `engine/README.md` | Detail engine. |
-| `.kiro/specs/ball-battle-simulator/requirements.md` | Requirement formal. |
-| `.kiro/specs/ball-battle-simulator/design.md` | Desain teknis. |
-| `.kiro/specs/ball-battle-simulator/tasks.md` | Daftar task + log balance (25.6). |
-| `.kiro/specs/ball-battle-simulator/roulette.md` | Fitur Roulette & rencana Trait/Ability (bahasa Indonesia). |
-| `.kiro/specs/ball-battle-simulator/assets-plan.md` | Katalog aset pixel-art. |
+| `docs/ROULETTE.md` | Fitur Roulette & rencana Trait/Ability (bahasa Indonesia). |
+| `docs/ASSETS_PLAN.md` | Katalog aset pixel-art (ukuran, pivot, hitbox, prompt). |
 
 ### Konvensi kerja
 

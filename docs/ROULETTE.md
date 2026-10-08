@@ -1,8 +1,7 @@
 # Roulette — Catatan Fitur
 
 Dokumen ini menjelaskan cara kerja fitur Roulette saat ini, file-file yang terlibat,
-cara menambah roda baru, dan rencana jangka panjangnya. Requirement formal ada di
-`requirements.md` (Requirement 12), task di `tasks.md` (17.1, 17.5).
+cara menambah roda baru, dan rencana jangka panjangnya.
 
 ---
 
@@ -102,15 +101,16 @@ SavedBall {
 2. **Jenis roda**: tambahkan ke `WheelKind` dan default `weights` di `stores/roulette.ts`:
    ```ts
    export type WheelKind = 'weapon' | 'trait'
-   state: () => ({ weights: { weapon: {}, trait: {} } })
+   state: () => ({ weights: { race: {}, weapon: {}, trait: {} } })
    ```
 3. **Tahap**: tambahkan entri di `STEPS` (`pages/roulette.vue`) sesuai urutan yang diinginkan:
    ```ts
-   { kind: 'trait', label: 'Trait', entries: () => traitRegistry.ids().map(...) }
+   { kind: 'trait', label: 'Trait', optional: true, entries: () => traitRegistry.ids().map(...) }
    ```
 4. **Simpan**: di `saveBall()`, petakan hasil tahap baru ke `BallConfig`
    (mis. `traits: [{ traitId: all.trait.id }]`). `seeds` otomatis ikut.
-5. **Spec**: perbarui Requirement 12 dan task 17.x.
+5. **Dokumen**: perbarui dokumen ini (tabel roda di bagian 5.1) dan `docs/PROJECT_OVERVIEW.md`.
+   `optional: true` membuat roda bisa dimatikan lewat toggle.
 
 Roda, slider peluang, Confirm, dan Save tidak perlu diubah.
 
@@ -181,7 +181,7 @@ Race  →  Weapon  →  Trait  →  Ability  →  (nama + Save)
 ## 7. Untuk AI / coding agent
 
 Bagian ini ditujukan untuk AI (Claude, Kiro, dll.) yang mengerjakan fitur Roulette.
-Baca seluruh dokumen ini, lalu `requirements.md` Requirement 12, sebelum mengubah kode.
+Baca seluruh dokumen ini sebelum mengubah kode.
 
 ### 7.1 Invarian (jangan dilanggar)
 
@@ -203,7 +203,7 @@ Baca seluruh dokumen ini, lalu `requirements.md` Requirement 12, sebelum menguba
 - [ ] `saveBall()` memetakan hasil tahap baru ke `BallConfig`.
 - [ ] Bagian 5.2 sudah diputuskan oleh user (target, kecocokan, slot, pemicu) — **tanya
       user jika belum**, jangan diasumsikan.
-- [ ] `requirements.md` (Req 12), `tasks.md` (17.x), dan dokumen ini diperbarui.
+- [ ] Dokumen ini (dan `docs/PROJECT_OVERVIEW.md` bila perlu) diperbarui.
 - [ ] `npx eslint .` dan `npx vue-tsc --noEmit -p .` lolos (Node 24: `nvm use 24`).
 
 ### 7.3 Konteks penting
