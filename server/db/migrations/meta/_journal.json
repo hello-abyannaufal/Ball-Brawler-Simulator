@@ -8,6 +8,13 @@
       "when": 1791272032989,
       "tag": "0000_dark_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1791458951883,
+      "tag": "0001_username_login",
+      "breakpoints": true
     }
   ]
 }

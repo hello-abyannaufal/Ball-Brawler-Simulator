@@ -3,10 +3,10 @@ import { pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 // Req 1.3: role constrained to exactly `superuser` and `viewer`.
 export const roleEnum = pgEnum('role', ['superuser', 'viewer'])
 
-// Req 1.1, 1.2: users table with unique email and a not-null password hash.
+// Req 1.1, 1.2: users table with unique username and a not-null password hash.
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
-  email: text('email').notNull().unique(), // Req 1.1, 1.2
+  username: text('username').notNull().unique(), // Req 1.1, 1.2
   passwordHash: text('password_hash').notNull(), // Req 1.1
   role: roleEnum('role').notNull(), // Req 1.1, 1.3
   createdAt: timestamp('created_at', { withTimezone: true })

@@ -4,18 +4,18 @@ import { users } from '~/server/db/schema'
 
 /**
  * POST /api/auth/login — Requirements 3.1, 3.2, 3.3.
- * On bad email OR password returns a single generic error that does not
+ * On bad username OR password returns a single generic error that does not
  * disclose which was wrong (Req 3.2).
  */
 export default defineEventHandler(async (event) => {
-  const body = await readBody<{ email?: unknown; password?: unknown }>(event)
+  const body = await readBody<{ username?: unknown; password?: unknown }>(event)
 
-  const email = typeof body?.email === 'string' ? body.email.trim() : ''
+  const username = typeof body?.username === 'string' ? body.username.trim() : ''
   const password = typeof body?.password === 'string' ? body.password : ''
 
   // Missing-field validation naming each (Req 3.3).
   const missing: string[] = []
-  if (!email) missing.push('email')
+  if (!username) missing.push('username')
   if (!password) missing.push('password')
   if (missing.length > 0) {
     throw createError({
@@ -28,17 +28,18 @@ export default defineEventHandler(async (event) => {
   const [user] = await db
     .select({
       id: users.id,
+      username: users.username,
       role: users.role,
       passwordHash: users.passwordHash,
     })
     .from(users)
-    .where(eq(users.email, email))
+    .where(eq(users.username, username))
     .limit(1)
 
   const genericError = () =>
-    createError({ statusCode: 401, statusMessage: 'Invalid email or password.' })
+    createError({ statusCode: 401, statusMessage: 'Invalid username or password.' })
 
-  // Do not disclose whether email or password was wrong (Req 3.2).
+  // Do not disclose whether username or password was wrong (Req 3.2).
   if (!user) {
     throw genericError()
   }
@@ -47,6 +48,8 @@ export default defineEventHandler(async (event) => {
     throw genericError()
   }
 
-  await setUserSession(event, { user: { id: user.id, role: user.role } })
-  return { id: user.id, role: user.role }
+  await setUserSession(event, {
+    user: { id: user.id, username: user.username, role: user.role },
+  })
+  return { id: user.id, username: user.username, role: user.role }
 })

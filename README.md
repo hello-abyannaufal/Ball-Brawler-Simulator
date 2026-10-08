@@ -43,7 +43,15 @@ npm run db:migrate
 
 Applies all pending migrations. Prints the count on success. On connection failure, reports the host/port attempted without leaking secrets.
 
-### 5. Run the app
+### 5. Create an account
+
+```fish
+npm run user:create -- <username> <password>
+```
+
+There is no register page yet, so accounts are created from the CLI. Username: 3–20 letters, digits or underscores. Password: 8–72 characters. Every page except the splash/login requires a signed-in account.
+
+### 6. Run the app
 
 ```fish
 npm run dev
@@ -51,7 +59,7 @@ npm run dev
 
 Opens at `http://localhost:3000`.
 
-### 6. Run tests
+### 7. Run tests
 
 ```fish
 npm test
@@ -69,6 +77,7 @@ Runs both engine (Node env, no DOM) and app (happy-dom) test suites via Vitest.
 | `npm run lint` | Lint with ESLint                    |
 | `npm run db:generate` | Generate Drizzle migrations  |
 | `npm run db:migrate`  | Apply pending DB migrations  |
+| `npm run user:create -- <username> <password>` | Create a login account |
 
 ## Architecture
 
