@@ -13,6 +13,8 @@ import RouletteWheel from '~/components/RouletteWheel.vue'
 import '~/engine/weapons/index' // populate the registry
 import '~/engine/races/index'
 
+definePageMeta({ middleware: 'auth' })
+
 const SPIN_MS = 3500
 const NAME_MAX = 24
 const SLICE_COLORS = ['#e43b44', '#0099db', '#63c74d', '#feae34', '#b55088', '#2ce8f5', '#b86f50', '#c0cbdc']
@@ -181,149 +183,170 @@ function onWeightInput(id: string, ev: Event): void {
 </script>
 
 <template>
-  <main class="mx-auto flex min-h-screen w-full max-w-lg flex-col items-center p-4">
-    <h1 class="mb-3 text-2xl font-bold">
-      Roulette
-    </h1>
-
-    <!-- Optional wheels can be switched off (Weapon is always on). -->
-    <div class="mb-2 flex flex-wrap justify-center gap-3 text-xs">
-      <label
-        v-for="s in STEPS.filter((x) => x.optional)"
-        :key="s.kind"
-        class="flex items-center gap-1"
-        :class="{ 'opacity-40': !canToggle }"
-      >
-        <input
-          type="checkbox"
-          :checked="roulette.isEnabled(s.kind)"
-          :disabled="!canToggle"
-          @change="onToggleStep(s.kind, $event)"
+  <PixelPage title="Roulette">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <!-- Step progress: confirmed steps show their pick. -->
+      <ol class="flex flex-wrap gap-3.5">
+        <li
+          v-for="(s, i) in activeSteps"
+          :key="s.kind"
+          :aria-current="i === stepIndex && !saved ? 'step' : undefined"
+          class="flex items-center gap-2 px-3 py-2.5 font-pixel text-[10px] uppercase"
+          :class="
+            i === stepIndex && !saved
+              ? 'bg-edg-gold text-edg-ink'
+              : picks[s.kind]
+                ? 'bg-edg-ink text-edg-green shadow-[inset_0_0_0_4px_#3e8948]'
+                : 'bg-edg-ink text-edg-mist'
+          "
         >
-        {{ s.label }}
-      </label>
-    </div>
-
-    <!-- Step progress: confirmed steps show their pick. -->
-    <ol class="mb-3 flex flex-wrap justify-center gap-2 text-xs">
-      <li
-        v-for="(s, i) in activeSteps"
-        :key="s.kind"
-        class="rounded border px-2 py-1"
-        :class="
-          i === stepIndex && !saved
-            ? 'border-indigo-600 bg-indigo-600 text-white'
-            : picks[s.kind]
-              ? 'border-green-700 text-green-700'
-              : 'border-gray-400 text-gray-500'
-        "
-      >
-        {{ i + 1 }}. {{ s.label }}<template v-if="picks[s.kind]">
-          ✓ {{ entryName(i, picks[s.kind]!.id) }}
-        </template>
-      </li>
-    </ol>
-
-    <h2 v-if="!saved" class="mb-2 text-lg font-semibold">
-      Spin the {{ step.label }} wheel
-    </h2>
-
-    <RouletteWheel ref="wheel" :slices="slices" class="mb-3" />
-
-    <button
-      v-if="!saved"
-      type="button"
-      class="mb-3 rounded bg-indigo-600 px-8 py-2 text-lg font-semibold text-white disabled:opacity-40"
-      :disabled="spinning"
-      @click="doSpin"
-    >
-      {{ spinning ? 'Spinning…' : result ? 'Spin again' : 'Spin' }}
-    </button>
-
-    <p v-if="error" role="alert" class="mb-2 text-sm text-red-600">
-      {{ error }}
-    </p>
-
-    <!-- Current step's result → Confirm, or (last step) name + Save. -->
-    <div v-if="result && !spinning && !saved" class="mb-4 flex w-full max-w-xs flex-col items-center gap-2">
-      <p class="text-sm font-bold text-[#feae34]">
-        {{ step.label }}: {{ entryName(stepIndex, result.id) }}
-      </p>
-
-      <button
-        v-if="!isLastStep"
-        type="button"
-        class="rounded bg-green-600 px-6 py-1 font-semibold text-white"
-        @click="confirmStep"
-      >
-        Confirm
-      </button>
-
-      <form v-else class="flex w-full flex-col gap-2" @submit.prevent="saveBall">
-        <label for="ball-name" class="text-xs font-semibold">Ball name</label>
-        <input
-          id="ball-name"
-          v-model="ballName"
-          type="text"
-          :maxlength="NAME_MAX"
-          placeholder="Name your ball"
-          class="rounded border border-black px-2 py-1 text-sm"
-        >
-        <button
-          type="submit"
-          class="rounded bg-green-600 px-6 py-1 font-semibold text-white disabled:opacity-40"
-          :disabled="!nameValid"
-        >
-          Save
-        </button>
-      </form>
-    </div>
-
-    <div v-if="saved" class="mb-4 flex flex-col items-center gap-2">
-      <p role="status" class="text-sm text-green-700">
-        Saved "{{ ballName.trim() }}" to Library.
-      </p>
-      <button
-        type="button"
-        class="rounded bg-indigo-600 px-6 py-1 font-semibold text-white"
-        @click="restart"
-      >
-        Roll another ball
-      </button>
-    </div>
-
-    <!-- Slice-size editor for the current wheel (0 removes the slice). -->
-    <section v-if="!saved" class="w-full max-w-xs">
-      <div class="mb-2 flex items-center justify-between">
-        <h2 class="text-sm font-bold">
-          {{ step.label }} odds
-        </h2>
-        <button
-          type="button"
-          class="text-xs underline disabled:opacity-40"
-          :disabled="spinning"
-          @click="roulette.resetWeights(step.kind)"
-        >
-          Reset
-        </button>
-      </div>
-      <ul class="space-y-2">
-        <li v-for="e in entries" :key="e.id" class="flex items-center gap-2 text-sm">
-          <span class="inline-block h-3 w-3 shrink-0 border border-black" :style="{ background: e.color }" />
-          <label :for="`w-${e.id}`" class="w-28 shrink-0 truncate">{{ e.name }}</label>
-          <input
-            :id="`w-${e.id}`"
-            type="range"
-            min="0"
-            :max="MAX_WEIGHT"
-            :value="e.weight"
-            :disabled="spinning"
-            class="flex-1"
-            @input="onWeightInput(e.id, $event)"
-          >
-          <span class="w-10 text-right tabular-nums">{{ Math.round(e.share * 100) }}%</span>
+          {{ i + 1 }} {{ s.label }}<template v-if="picks[s.kind]">
+            · {{ entryName(i, picks[s.kind]!.id) }}
+          </template>
         </li>
-      </ul>
-    </section>
-  </main>
+      </ol>
+
+      <!-- Optional wheels can be switched off (Weapon is always on). -->
+      <div class="flex flex-wrap gap-4">
+        <label
+          v-for="s in STEPS.filter((x) => x.optional)"
+          :key="s.kind"
+          class="flex cursor-pointer items-center gap-2.5 text-[22px] text-edg-fog"
+          :class="{ 'cursor-not-allowed opacity-40': !canToggle }"
+        >
+          <input
+            type="checkbox"
+            class="size-[22px] accent-edg-gold"
+            :checked="roulette.isEnabled(s.kind)"
+            :disabled="!canToggle"
+            @change="onToggleStep(s.kind, $event)"
+          >
+          {{ s.label }} wheel
+        </label>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-start gap-10">
+      <section aria-labelledby="wheel-title" class="flex min-w-0 flex-[1_1_340px] flex-col items-center gap-7">
+        <h2 id="wheel-title" class="font-pixel text-xs uppercase text-edg-sand">
+          <template v-if="!saved">
+            Spin the {{ step.label }} wheel
+          </template>
+          <template v-else>
+            Ball saved
+          </template>
+        </h2>
+
+        <RouletteWheel ref="wheel" :slices="slices" />
+
+        <button
+          v-if="!saved"
+          type="button"
+          class="px-btn-gold h-16 w-full max-w-[320px] font-pixel text-lg"
+          :disabled="spinning"
+          @click="doSpin"
+        >
+          {{ spinning ? 'SPINNING…' : result ? 'SPIN AGAIN' : 'SPIN' }}
+        </button>
+
+        <p v-if="error" role="alert" class="bg-edg-ink px-3 py-2 text-[22px] text-edg-sun">
+          {{ error }}
+        </p>
+      </section>
+
+      <div class="flex min-w-0 flex-[1_1_340px] flex-col gap-8">
+        <!-- Current step's result → Confirm, or (last step) name + Save. -->
+        <section
+          v-if="result && !spinning && !saved"
+          aria-labelledby="result-title"
+          class="px-panel flex flex-col gap-[18px] px-5 pb-6 pt-[22px]"
+        >
+          <h2 id="result-title" class="font-pixel text-xs text-edg-sand">
+            RESULT
+          </h2>
+          <p class="font-pixel text-sm uppercase text-edg-gold">
+            {{ step.label }}: {{ entryName(stepIndex, result.id) }}
+          </p>
+
+          <button
+            v-if="!isLastStep"
+            type="button"
+            class="px-btn-green h-14 font-pixel text-sm"
+            @click="confirmStep"
+          >
+            CONFIRM
+          </button>
+
+          <form v-else class="flex flex-col gap-2.5" @submit.prevent="saveBall">
+            <label for="ball-name" class="font-pixel text-[10px] text-edg-sand">BALL NAME</label>
+            <input
+              id="ball-name"
+              v-model="ballName"
+              type="text"
+              :maxlength="NAME_MAX"
+              placeholder="Name your ball"
+              class="px-field placeholder:text-edg-mist"
+            >
+            <button
+              type="submit"
+              class="px-btn-green mt-3.5 h-14 font-pixel text-sm"
+              :disabled="!nameValid"
+            >
+              SAVE TO LIBRARY
+            </button>
+          </form>
+        </section>
+
+        <section v-if="saved" class="px-panel flex flex-col items-center gap-4 px-5 pb-6 pt-[22px] text-center">
+          <p role="status" class="text-2xl text-edg-green">
+            Saved "{{ ballName.trim() }}" to Library.
+          </p>
+          <button
+            type="button"
+            class="px-btn-gold h-[52px] w-full font-pixel text-xs"
+            @click="restart"
+          >
+            ROLL ANOTHER BALL
+          </button>
+          <NuxtLink to="/library" class="flex min-h-11 items-center text-2xl text-edg-gold underline">
+            Open Library →
+          </NuxtLink>
+        </section>
+
+        <!-- Slice-size editor for the current wheel (0 removes the slice). -->
+        <section v-if="!saved" aria-labelledby="odds-title" class="px-panel flex flex-col gap-4 px-5 pb-6 pt-[22px]">
+          <div class="flex items-center justify-between gap-3">
+            <h2 id="odds-title" class="font-pixel text-xs uppercase text-edg-sand">
+              {{ step.label }} odds
+            </h2>
+            <button
+              type="button"
+              class="min-h-11 px-2 text-[22px] text-edg-gold underline disabled:opacity-40"
+              :disabled="spinning"
+              @click="roulette.resetWeights(step.kind)"
+            >
+              Reset
+            </button>
+          </div>
+          <ul class="flex flex-col gap-3">
+            <li v-for="e in entries" :key="e.id" class="flex items-center gap-2.5 text-[22px]">
+              <span class="size-4 shrink-0 shadow-[0_0_0_3px_#181425]" :style="{ background: e.color }" />
+              <label :for="`w-${e.id}`" class="w-24 shrink-0 truncate">{{ e.name }}</label>
+              <input
+                :id="`w-${e.id}`"
+                type="range"
+                min="0"
+                :max="MAX_WEIGHT"
+                :value="e.weight"
+                :disabled="spinning"
+                class="min-w-0 flex-1 accent-edg-gold"
+                @input="onWeightInput(e.id, $event)"
+              >
+              <span class="w-11 text-right tabular-nums">{{ Math.round(e.share * 100) }}%</span>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </div>
+  </PixelPage>
 </template>

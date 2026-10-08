@@ -1,9 +1,17 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+// Already signed in: the login popup has nothing to do, go Home.
+definePageMeta({
+  middleware: () => {
+    const { loggedIn } = useUserSession()
+    if (loggedIn.value) {
+      return navigateTo('/')
+    }
+  },
+})
+</script>
 
 <template>
-  <main class="p-6">
-    <h1 class="text-2xl font-bold">
-      Login
-    </h1>
-  </main>
+  <SplashScreen>
+    <LoginDialog />
+  </SplashScreen>
 </template>

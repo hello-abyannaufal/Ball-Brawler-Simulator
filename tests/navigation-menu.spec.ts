@@ -3,17 +3,15 @@ import { mountSuspended } from '@nuxt/test-utils/runtime'
 import NavigationMenu from '~/components/NavigationMenu.vue'
 
 const ROUTES = [
-  '/login',
-  '/register',
-  '/roulette',
   '/versus',
+  '/roulette',
   '/library',
   '/recordings',
   '/settings',
 ]
 
 describe('NavigationMenu', () => {
-  it('renders exactly one link per non-home route', async () => {
+  it('renders exactly one link per game route', async () => {
     const wrapper = await mountSuspended(NavigationMenu)
     const hrefs = wrapper.findAll('a').map(a => a.attributes('href'))
     expect(hrefs).toHaveLength(ROUTES.length)
@@ -41,12 +39,12 @@ describe('NavigationMenu', () => {
     const router = useRouter()
     const push = vi.spyOn(router, 'push')
     await wrapper.find('a').trigger('keydown.space')
-    expect(push).toHaveBeenCalledWith('/login')
+    expect(push).toHaveBeenCalledWith('/versus')
   })
 
   it('Enter on a link navigates via the native anchor href', async () => {
     const wrapper = await mountSuspended(NavigationMenu)
     // NuxtLink renders a real anchor; Enter activates it natively.
-    expect(wrapper.find('a').attributes('href')).toBe('/login')
+    expect(wrapper.find('a').attributes('href')).toBe('/versus')
   })
 })

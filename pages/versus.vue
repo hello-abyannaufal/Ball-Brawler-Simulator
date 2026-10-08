@@ -14,6 +14,9 @@ import { raceRegistry } from '~/engine/races/registry'
 import { defaultBalls, hpBarFraction, placeForDuel } from '~/utils/duel'
 import { spriteSource } from '~/assets/sprites/manifest'
 import '~/engine/weapons/index' // populate the registry
+import '~/engine/races/index'
+
+definePageMeta({ middleware: 'auth' })
 
 // Arena configured into a Duel_Config before running (Req 11.4).
 const arena = { width: 360, height: 360 } // 1:1
@@ -139,6 +142,23 @@ function weaponIcon(c: BallConfig): string | null {
   return croppedIcons.value[src.src] ?? src.src // uncropped until onMounted finishes
 }
 
+function ballFill(c: BallConfig): string {
+  return c.appearance?.type === 'color' ? c.appearance.value : '#c0cbdc'
+}
+
+/** "Race · HP" line for a fighter card; the race supplies HP when set. */
+function statsLine(c: BallConfig): string {
+  const race = c.raceId !== undefined ? raceRegistry.get(c.raceId) : undefined
+  const hp = race?.maxHp || c.maxHp
+  return race ? `${race.name} · ${hp}` : `HP ${hp}`
+}
+
+/** "P1" / "P2" for selected fighters, in pick order. */
+function slotLabel(key: string): string {
+  const i = selected.value.findIndex((c) => c.key === key)
+  return i >= 0 ? `P${i + 1}` : ''
+}
+
 onMounted(() => {
   for (const id of weaponRegistry.ids()) {
     const spriteId = weaponRegistry.get(id)?.spriteId
@@ -252,129 +272,197 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <main class="mx-auto flex min-h-screen w-full max-w-xl flex-col items-center p-4">
-    <h1 class="mb-3 text-2xl font-bold">
-      Versus
-    </h1>
-
-    <section v-if="!running" class="mb-4 w-full max-w-xs">
-      <p class="mb-2 text-sm">
-        Select exactly two balls:
-      </p>
-      <ul class="mb-2 space-y-1">
-        <li v-for="b in candidates" :key="b.key">
-          <label class="flex items-center gap-2" :class="{ 'opacity-50': !b.usable }">
-            <input
-              type="checkbox"
-              :checked="selectedIds.includes(b.key)"
-              :disabled="!b.usable"
-              @change="toggle(b.key)"
-            >
-            <img
-              v-if="weaponIcon(b.config)"
-              :src="weaponIcon(b.config)!"
-              alt=""
-              class="h-8 w-8 shrink-0 -rotate-45 object-contain"
-              style="image-rendering: pixelated"
-            >
-            <span
-              v-else
-              class="inline-block h-3 w-3 shrink-0 rounded-full border border-black"
-              :style="{ background: b.config.appearance?.type === 'color' ? b.config.appearance.value : '#c0cbdc' }"
-              aria-hidden="true"
-            />
-            <span>{{ b.name }}</span>
-            <span class="text-xs text-gray-500">
-              {{ !b.usable ? '(unknown weapon or race)' : b.source === 'library' ? '· Library' : '· Default' }}
-            </span>
-          </label>
-        </li>
-      </ul>
-      <p v-if="!canStart" role="alert" class="mb-2 text-sm text-red-600">
-        Pick exactly two balls to start (currently {{ selected.length }}).
-      </p>
-      <label class="mb-2 flex items-center gap-2 text-sm">
-        <input v-model="showHitboxes" type="checkbox">
-        <span>Show hitboxes (debug)</span>
-      </label>
-      <label class="mb-2 flex items-center gap-2 text-sm">
-        <input v-model="soundEnabled" type="checkbox">
-        <span>Sound</span>
-      </label>
-      <p v-if="recError" role="alert" class="mb-2 text-sm text-red-600">
-        {{ recError }}
-      </p>
-      <div class="flex gap-2">
-        <button
-          type="button"
-          :disabled="!canStart"
-          class="rounded bg-indigo-600 px-4 py-2 text-white disabled:opacity-40"
-          @click="startDuel(false)"
-        >
-          Start duel
-        </button>
-        <button
-          type="button"
-          :disabled="!canStart"
-          class="rounded bg-rose-600 px-4 py-2 text-white disabled:opacity-40"
-          @click="startDuel(true)"
-        >
-          Auto record
-        </button>
-      </div>
-    </section>
-
-    <section v-else class="flex w-full flex-col items-center">
-      <div class="mb-2 flex w-full max-w-[480px] justify-center gap-6">
-        <div v-for="(h, i) in hp" :key="h.id" class="text-xs">
-          {{ duelNames[i] ?? `Ball ${h.id}` }}
-          <div class="h-2 w-40 bg-red-900">
-            <div
-              class="h-2 bg-green-500"
-              :style="{ width: `${hpBarFraction(h.hp, h.maxHp) * 100}%` }"
-            />
-          </div>
+  <PixelPage title="Versus">
+    <div v-if="!running" class="flex flex-wrap items-start gap-9">
+      <section aria-labelledby="pick-title" class="flex min-w-0 flex-[999_1_520px] flex-col gap-5">
+        <div class="flex flex-wrap items-baseline justify-between gap-3">
+          <h2 id="pick-title" class="font-pixel text-xs text-edg-sand">
+            CHOOSE 2 FIGHTERS
+          </h2>
+          <span class="text-[22px] text-edg-fog">{{ selected.length }} / 2 selected</span>
         </div>
+
+        <ul class="grid grid-cols-[repeat(auto-fill,minmax(148px,1fr))] gap-[22px]">
+          <li v-for="b in candidates" :key="b.key" class="flex">
+            <button
+              type="button"
+              :aria-pressed="selectedIds.includes(b.key)"
+              :disabled="!b.usable"
+              class="relative flex grow flex-col items-center gap-1.5 px-2.5 pb-3.5 pt-4 text-center"
+              :class="selectedIds.includes(b.key) && b.usable ? 'px-selected' : 'px-btn-slate'"
+              @click="toggle(b.key)"
+            >
+              <span
+                v-if="slotLabel(b.key)"
+                class="absolute -left-2.5 -top-2.5 bg-edg-gold px-1.5 py-1.5 font-pixel text-[10px] text-edg-ink shadow-[0_0_0_4px_#181425]"
+              >{{ slotLabel(b.key) }}</span>
+              <span class="relative block h-16 w-24" aria-hidden="true">
+                <PixelBall :fill="ballFill(b.config)" class="absolute left-1 top-1 size-14" />
+                <img
+                  v-if="weaponIcon(b.config)"
+                  :src="weaponIcon(b.config)!"
+                  alt=""
+                  class="absolute right-0 top-4 size-12 -rotate-45 object-contain [image-rendering:pixelated]"
+                >
+              </span>
+              <span class="font-pixel text-[11px] leading-snug">{{ b.name }}</span>
+              <span class="text-xl leading-none text-edg-fog">
+                {{ b.usable ? statsLine(b.config) : 'Unknown weapon or race' }}
+              </span>
+              <span
+                class="bg-edg-ink px-1.5 text-lg"
+                :class="b.source === 'library' ? 'text-edg-gold' : 'text-edg-mist'"
+              >{{ b.source === 'library' ? 'LIBRARY' : 'DEFAULT' }}</span>
+            </button>
+          </li>
+        </ul>
+      </section>
+
+      <aside aria-label="Match setup" class="px-panel flex min-w-0 flex-[1_1_320px] flex-col gap-[22px] px-5 pb-6 pt-[22px]">
+        <h2 class="font-pixel text-xs text-edg-sand">
+          MATCH
+        </h2>
+
+        <div class="flex items-center justify-between gap-2">
+          <div
+            v-for="(slot, i) in [selected[0], selected[1]]"
+            :key="i"
+            class="flex min-w-0 flex-1 flex-col items-center gap-2 bg-edg-night px-1.5 py-3.5 shadow-[inset_0_4px_0_#181425]"
+            :class="i === 1 ? 'order-3' : ''"
+          >
+            <span class="font-pixel text-[10px]" :class="i === 0 ? 'text-[#0099db]' : 'text-edg-red'">P{{ i + 1 }}</span>
+            <PixelBall v-if="slot" :fill="ballFill(slot.config)" class="size-16" />
+            <span v-else class="flex size-16 items-center justify-center font-pixel text-xl text-edg-mist" aria-hidden="true">?</span>
+            <span class="max-w-full truncate font-pixel text-[10px]">{{ slot?.name ?? '—' }}</span>
+          </div>
+          <span class="order-2 font-pixel text-base text-edg-red [text-shadow:3px_3px_0_#181425]">VS</span>
+        </div>
+
+        <div class="flex flex-col gap-3 text-2xl">
+          <label class="flex cursor-pointer items-center gap-3">
+            <input v-model="soundEnabled" type="checkbox" class="size-6 accent-edg-gold">
+            <span>Sound</span>
+          </label>
+          <label class="flex cursor-pointer items-center gap-3">
+            <input v-model="showHitboxes" type="checkbox" class="size-6 accent-edg-gold">
+            <span>Show hitboxes <span class="text-edg-mist">(debug)</span></span>
+          </label>
+        </div>
+
+        <p v-if="!canStart" role="alert" class="bg-edg-ink px-3 py-2 text-[22px] text-edg-sun">
+          Pick exactly two balls to start (currently {{ selected.length }}).
+        </p>
+        <p v-if="recError" role="alert" class="bg-edg-ink px-3 py-2 text-[22px] text-edg-sun">
+          {{ recError }}
+        </p>
+
+        <div class="flex flex-col gap-5">
+          <button
+            type="button"
+            :disabled="!canStart"
+            class="px-btn-gold h-[60px] font-pixel text-base"
+            @click="startDuel(false)"
+          >
+            START DUEL
+          </button>
+          <button
+            type="button"
+            :disabled="!canStart"
+            class="px-btn-red flex h-[52px] items-center justify-center gap-2.5 font-pixel text-xs"
+            @click="startDuel(true)"
+          >
+            <svg width="16" height="16" viewBox="0 0 4 4" shape-rendering="crispEdges" aria-hidden="true">
+              <path fill="#ffffff" d="M1 0h2v1h-2zM0 1h4v2h-4zM1 3h2v1h-2z" />
+            </svg>
+            AUTO RECORD
+          </button>
+        </div>
+      </aside>
+    </div>
+
+    <section v-else class="mx-auto flex w-full max-w-[760px] flex-col items-center gap-6">
+      <div class="flex w-full items-center gap-3">
+        <template v-for="(h, i) in hp" :key="h.id">
+          <span v-if="i === 1" class="font-pixel text-sm text-edg-red [text-shadow:3px_3px_0_#181425]">VS</span>
+          <div
+            class="px-panel flex min-w-0 flex-1 flex-col gap-2 px-3.5 pb-3.5 pt-3"
+            :class="i === 1 ? 'items-end text-right' : ''"
+          >
+            <span class="max-w-full truncate font-pixel text-[10px] uppercase">{{ duelNames[i] ?? `Ball ${h.id}` }}</span>
+            <div
+              class="flex h-4 w-full bg-edg-ink p-1"
+              :class="i === 1 ? 'justify-end' : ''"
+              role="meter"
+              :aria-label="`${duelNames[i] ?? `Ball ${h.id}`} HP`"
+              aria-valuemin="0"
+              :aria-valuemax="h.maxHp"
+              :aria-valuenow="h.hp"
+            >
+              <div
+                class="h-2"
+                :class="hpBarFraction(h.hp, h.maxHp) < 0.35 ? 'bg-edg-red' : 'bg-edg-green'"
+                :style="{ width: `${hpBarFraction(h.hp, h.maxHp) * 100}%` }"
+              />
+            </div>
+            <span class="text-xl leading-none text-edg-fog">{{ Math.max(0, Math.ceil(h.hp)) }} / {{ h.maxHp }}</span>
+          </div>
+        </template>
       </div>
 
-      <p v-if="autoRecording" role="status" class="mb-1 text-xs font-semibold text-rose-600">
-        ● Recording…
-      </p>
-      <p v-if="recError" role="alert" class="mb-1 text-sm text-red-600">
+      <p v-if="recError" role="alert" class="bg-edg-ink px-3 py-2 text-[22px] text-edg-sun">
         {{ recError }}
       </p>
-      <canvas
-        ref="canvasEl"
-        :width="settings.width"
-        :height="settings.height"
-        class="w-full border border-black"
-        :style="canvasStyle"
-      />
+
+      <div class="relative w-full" :style="{ maxWidth: canvasStyle.maxWidth }">
+        <p
+          v-if="autoRecording"
+          role="status"
+          class="absolute left-4 top-4 z-10 flex items-center gap-2 bg-edg-ink px-2 py-1.5 font-pixel text-[10px]"
+        >
+          <svg width="12" height="12" viewBox="0 0 4 4" shape-rendering="crispEdges" aria-hidden="true">
+            <path fill="#e43b44" d="M1 0h2v1h-2zM0 1h4v2h-4zM1 3h2v1h-2z" />
+          </svg>
+          REC
+        </p>
+        <canvas
+          ref="canvasEl"
+          :width="settings.width"
+          :height="settings.height"
+          class="block w-full shadow-[0_0_0_8px_#181425,0_0_0_12px_#8b9bb4,0_0_0_16px_#181425]"
+          :style="canvasStyle"
+        />
+      </div>
 
       <div
         v-if="winner !== undefined"
         role="status"
-        class="mt-2 text-lg font-bold"
+        class="mt-4 flex w-full max-w-[480px] flex-col items-center gap-2.5 bg-edg-ink px-3 py-[18px] shadow-[0_-4px_0_#feae34,0_4px_0_#feae34]"
       >
-        {{ winner === null ? 'DRAW' : `Winner: ${winnerName}` }}
+        <template v-if="winner === null">
+          <span class="font-pixel text-[clamp(20px,3vh,28px)] text-edg-gold [text-shadow:3px_3px_0_#733e39]">DRAW</span>
+        </template>
+        <template v-else>
+          <span class="font-pixel text-xs text-edg-sand">Winner:</span>
+          <span class="font-pixel text-[clamp(20px,3vh,28px)] uppercase text-edg-gold [text-shadow:3px_3px_0_#733e39]">{{ winnerName }}</span>
+        </template>
       </div>
 
-      <div class="mt-3 flex gap-2">
+      <div class="mt-3 flex w-full max-w-[480px] flex-wrap gap-5">
         <button
           type="button"
-          class="rounded bg-indigo-600 px-4 py-2 text-white"
+          class="px-btn-gold h-14 flex-[1_1_180px] font-pixel text-sm"
           @click="rematch"
         >
-          Rematch
+          REMATCH
         </button>
         <button
           type="button"
-          class="rounded bg-gray-500 px-4 py-2 text-white"
+          class="px-btn-slate h-14 flex-[1_1_180px] font-pixel text-sm"
           @click="running = false"
         >
-          Back
+          BACK
         </button>
       </div>
     </section>
-  </main>
+  </PixelPage>
 </template>

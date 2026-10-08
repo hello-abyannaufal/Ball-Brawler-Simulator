@@ -12,8 +12,8 @@ import notFound from '~/pages/[...slug].vue'
 
 describe('placeholder pages', () => {
   const cases: Array<[string, unknown, string]> = [
-    ['index', index, 'Ball Battle Simulator — Home'],
-    ['login', login, 'Login'],
+    ['index (signed out: splash)', index, 'Ball Brawler'],
+    ['login', login, 'Ball Brawler'],
     ['register', register, 'Register'],
     ['roulette', roulette, 'Roulette'],
     ['versus', versus, 'Versus'],
@@ -24,7 +24,12 @@ describe('placeholder pages', () => {
 
   it.each(cases)('%s renders its unique heading', async (_name, component, heading) => {
     const wrapper = await mountSuspended(component as never)
-    expect(wrapper.find('h1').text()).toContain(heading)
+    expect(wrapper.find('h1').text().replace(/\s+/g, ' ')).toContain(heading)
+  })
+
+  it('login opens the login dialog', async () => {
+    const wrapper = await mountSuspended(login)
+    expect(wrapper.find('[role="dialog"] #login-title').text()).toBe('LOGIN')
   })
 
   it('not-found view renders a page-not-found heading', async () => {

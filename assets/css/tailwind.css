@@ -14,6 +14,93 @@
   }
 }
 
+/* Pixel-art UI pieces (EDG32 palette). Frames are 4px box-shadow outlines
+   with notched corners; buttons add a 1-pixel bevel inside. */
+@layer components {
+  .px-tiles {
+    background-color: #262b44;
+    background-image:
+      linear-gradient(to right, #181425 4px, transparent 4px),
+      linear-gradient(to bottom, #181425 4px, transparent 4px);
+    background-size: 64px 64px;
+  }
+  .px-frame {
+    box-shadow: 0 -4px 0 #181425, 0 4px 0 #181425, -4px 0 0 #181425, 4px 0 0 #181425;
+  }
+  .px-btn-gold {
+    background: #feae34;
+    color: #181425;
+    box-shadow: 0 -4px 0 #181425, 0 4px 0 #181425, -4px 0 0 #181425, 4px 0 0 #181425,
+      inset 0 -6px 0 #f77622, inset 0 4px 0 #fee761;
+  }
+  .px-btn-slate {
+    background: #3a4466;
+    color: #ffffff;
+    box-shadow: 0 -4px 0 #181425, 0 4px 0 #181425, -4px 0 0 #181425, 4px 0 0 #181425,
+      inset 0 -6px 0 #262b44, inset 0 4px 0 #5a6988;
+  }
+  .px-btn-green {
+    background: #63c74d;
+    color: #181425;
+    box-shadow: 0 -4px 0 #181425, 0 4px 0 #181425, -4px 0 0 #181425, 4px 0 0 #181425,
+      inset 0 -6px 0 #3e8948;
+  }
+  .px-btn-red {
+    background: #a22633;
+    color: #ffffff;
+    box-shadow: 0 -4px 0 #181425, 0 4px 0 #181425, -4px 0 0 #181425, 4px 0 0 #181425,
+      inset 0 -6px 0 #3e2731, inset 0 4px 0 #e43b44;
+  }
+  .px-btn-dark {
+    background: #262b44;
+    color: #ffffff;
+    box-shadow: inset 0 -4px 0 #181425;
+  }
+  .px-btn-gold:active,
+  .px-btn-slate:active,
+  .px-btn-green:active,
+  .px-btn-red:active,
+  .px-btn-dark:active {
+    transform: translateY(2px);
+  }
+  .px-btn-gold:disabled,
+  .px-btn-slate:disabled,
+  .px-btn-green:disabled,
+  .px-btn-red:disabled,
+  .px-btn-dark:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+    transform: none;
+  }
+  /* Selected card/row: lighter fill and a gold inner outline. */
+  .px-selected {
+    background: #5a6988;
+    box-shadow: 0 -4px 0 #181425, 0 4px 0 #181425, -4px 0 0 #181425, 4px 0 0 #181425,
+      inset 0 0 0 4px #feae34;
+  }
+  .px-panel {
+    background: #3a4466;
+    box-shadow: 0 -4px 0 #181425, 0 4px 0 #181425, -4px 0 0 #181425, 4px 0 0 #181425,
+      inset 0 -4px 0 #262b44;
+  }
+  .px-field {
+    height: 3rem;
+    padding: 0 0.75rem;
+    background: #262b44;
+    color: #ffffff;
+    font-family: VT323, monospace;
+    font-size: 1.5rem;
+    box-shadow: inset 4px 4px 0 #181425, 0 0 0 4px #5a6988;
+  }
+  .px-arena {
+    background-color: #3e2731;
+    background-image:
+      linear-gradient(to right, #733e39 4px, transparent 4px),
+      linear-gradient(to bottom, #733e39 4px, transparent 4px);
+    background-size: 48px 48px;
+  }
+}
+
 /* Reduced motion (Req 16.1): decorative/transition UI animation becomes an
    instant 0 ms change. The duel canvas is unaffected (Req 16.2). */
 @media (prefers-reduced-motion: reduce) {
