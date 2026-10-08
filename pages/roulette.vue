@@ -28,17 +28,20 @@ interface WheelEntry {
  * → Confirm → next step; the last step shows a name input and Save instead.
  * Add a wheel (e.g. Trait, Ability) by appending a step here and its kind to
  * `WheelKind` — the wheel, weights, and flow need no other change.
+ * `optional` steps can be switched off by the user; the ball then uses defaults.
  */
-const STEPS: { kind: WheelKind; label: string; entries: () => WheelEntry[] }[] = [
+const STEPS: { kind: WheelKind; label: string; optional: boolean; entries: () => WheelEntry[] }[] = [
   {
     kind: 'race',
     label: 'Race',
+    optional: true,
     entries: () =>
       raceRegistry.ids().map((id) => ({ id, name: raceRegistry.get(id)?.name ?? id })),
   },
   {
     kind: 'weapon',
     label: 'Weapon',
+    optional: false,
     entries: () =>
       weaponRegistry.ids().map((id) => {
         const def = weaponRegistry.get(id)
@@ -64,8 +67,11 @@ const prefersReducedMotion
   = typeof window !== 'undefined'
   && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
 
-const step = computed(() => STEPS[stepIndex.value]!)
-const isLastStep = computed(() => stepIndex.value === STEPS.length - 1)
+const activeSteps = computed(() => STEPS.filter((s) => !s.optional || roulette.isEnabled(s.kind)))
+const step = computed(() => activeSteps.value[stepIndex.value]!)
+const isLastStep = computed(() => stepIndex.value === activeSteps.value.length - 1)
+/** Toggles only before anything is confirmed, so the step order can't shift mid-roll. */
+const canToggle = computed(() => stepIndex.value === 0 && !spinning.value && !saved.value)
 const nameValid = computed(() => ballName.value.trim().length > 0)
 
 /** Current step's entries with weight, color, and share of the wheel. */
@@ -86,7 +92,7 @@ const slices = computed<WheelSlice[]>(() =>
 )
 
 function entryName(stepIdx: number, id: string): string {
-  return STEPS[stepIdx]!.entries().find((e) => e.id === id)?.name ?? id
+  return activeSteps.value[stepIdx]!.entries().find((e) => e.id === id)?.name ?? id
 }
 
 function randomSeed(): number {
@@ -130,9 +136,8 @@ function confirmStep(): void {
 function saveBall(): void {
   if (!result.value || !nameValid.value) return
   const all = { ...picks.value, [step.value.kind]: result.value }
-  const race = all.race
   const weapon = all.weapon
-  if (!race || !weapon) return
+  if (!weapon) return
   // Build a ball config carrying every drawn pick (Req 12.7).
   const config: BallConfig = {
     id: `roulette-${weapon.seed}`,
@@ -141,7 +146,7 @@ function saveBall(): void {
     initialPosition: { x: 0, y: 0 },
     initialVelocity: { x: 120, y: 0 },
     weapons: [{ weaponId: weapon.id }],
-    raceId: race.id, // supplies HP and radius
+    raceId: all.race?.id, // supplies HP and radius; off ⇒ defaults above
     appearance: { type: 'color', value: '#feae34' },
   }
   const seeds = Object.fromEntries(Object.entries(all).map(([k, r]) => [k, r.seed]))
@@ -165,6 +170,11 @@ function restart(): void {
   saved.value = false
 }
 
+function onToggleStep(kind: WheelKind, ev: Event): void {
+  roulette.setEnabled(kind, (ev.target as HTMLInputElement).checked)
+  restart()
+}
+
 function onWeightInput(id: string, ev: Event): void {
   roulette.setWeight(step.value.kind, id, Number((ev.target as HTMLInputElement).value))
 }
@@ -176,10 +186,28 @@ function onWeightInput(id: string, ev: Event): void {
       Roulette
     </h1>
 
+    <!-- Optional wheels can be switched off (Weapon is always on). -->
+    <div class="mb-2 flex flex-wrap justify-center gap-3 text-xs">
+      <label
+        v-for="s in STEPS.filter((x) => x.optional)"
+        :key="s.kind"
+        class="flex items-center gap-1"
+        :class="{ 'opacity-40': !canToggle }"
+      >
+        <input
+          type="checkbox"
+          :checked="roulette.isEnabled(s.kind)"
+          :disabled="!canToggle"
+          @change="onToggleStep(s.kind, $event)"
+        >
+        {{ s.label }}
+      </label>
+    </div>
+
     <!-- Step progress: confirmed steps show their pick. -->
     <ol class="mb-3 flex flex-wrap justify-center gap-2 text-xs">
       <li
-        v-for="(s, i) in STEPS"
+        v-for="(s, i) in activeSteps"
         :key="s.kind"
         class="rounded border px-2 py-1"
         :class="

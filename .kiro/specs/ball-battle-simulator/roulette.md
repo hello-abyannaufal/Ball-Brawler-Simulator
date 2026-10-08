@@ -39,6 +39,12 @@ Aturan:
 > Saat ini tahapnya Race → Weapon: Race punya tombol Confirm, Weapon adalah tahap terakhir
 > (input nama + Save).
 
+**Toggle roda:** di atas penanda tahap ada checkbox untuk roda opsional (saat ini **Race**).
+Weapon selalu aktif. Roda yang dimatikan dilewati, dan bola memakai nilai default
+(mis. tanpa Race ⇒ HP 100, radius 32). Toggle hanya bisa diubah di tahap pertama sebelum
+ada yang di-Confirm; mengubahnya me-reset roll. Status toggle disimpan di `stores/roulette.ts`
+(`disabled`).
+
 ---
 
 ## 3. Arsitektur & file

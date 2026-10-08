@@ -10,11 +10,14 @@ export const MAX_WEIGHT = 100
 interface RouletteState {
   /** Custom slice weights per wheel, keyed by entry id. Missing = DEFAULT_WEIGHT. */
   weights: Record<WheelKind, Record<string, number>>
+  /** Optional wheels the user switched off. Missing = on. */
+  disabled: Partial<Record<WheelKind, boolean>>
 }
 
 export const useRouletteStore = defineStore('roulette', {
   state: (): RouletteState => ({
     weights: { race: {}, weapon: {} },
+    disabled: {},
   }),
 
   actions: {
@@ -29,6 +32,14 @@ export const useRouletteStore = defineStore('roulette', {
 
     resetWeights(kind: WheelKind): void {
       this.weights[kind] = {}
+    },
+
+    isEnabled(kind: WheelKind): boolean {
+      return !this.disabled?.[kind]
+    },
+
+    setEnabled(kind: WheelKind, on: boolean): void {
+      this.disabled = { ...this.disabled, [kind]: !on }
     },
   },
 
