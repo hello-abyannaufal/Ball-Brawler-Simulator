@@ -3,6 +3,8 @@ import type { Vec2 } from '~/engine/entities'
 import { createRng } from '~/engine/rng'
 import { ballStats } from '~/engine/races/registry'
 import '~/engine/races/index' // populate the registry
+import { weaponRegistry } from '~/engine/weapons/registry'
+import '~/engine/weapons/index' // populate the registry
 
 /**
  * HP bar fill fraction, clamped to [0, 1] (Req 11.7). Pure.
@@ -15,36 +17,25 @@ export function hpBarFraction(hp: number, maxHp: number): number {
   return Math.min(1, Math.max(0, f))
 }
 
+/** Colors cycled across the default balls. */
+const DEFAULT_COLORS = ['#e43b44', '#0099db', '#63c74d', '#feae34', '#b55088', '#2ce8f5', '#b86f50', '#c0cbdc']
+
 /**
- * At least two default balls so Versus runs without any login or saved content
- * (Req 11.3). Positions/velocities are set so a duel actually happens; the
- * arena is configured by the versus page.
+ * One default ball per registered weapon, so Versus runs without any login or
+ * saved content (Req 11.3) and every weapon can be tried. Start position and
+ * velocity are placeholders; placeForDuel sets the real ones per duel.
  */
 export function defaultBalls(): BallConfig[] {
-  // Positioned for a 360×360 (1:1) arena, big balls kept close so weapons
-  // clash often.
-  return [
-    {
-      id: 'default-red',
-      radius: 32,
-      maxHp: 100,
-      initialPosition: { x: 140, y: 180 },
-      initialVelocity: { x: 180, y: 90 },
-      weapons: [{ weaponId: 'sword' }],
-      raceId: 'human',
-      appearance: { type: 'color', value: '#e43b44' },
-    },
-    {
-      id: 'default-blue',
-      radius: 32,
-      maxHp: 100,
-      initialPosition: { x: 220, y: 180 },
-      initialVelocity: { x: -180, y: -90 },
-      weapons: [{ weaponId: 'spear' }],
-      raceId: 'human',
-      appearance: { type: 'color', value: '#0099db' },
-    },
-  ]
+  return weaponRegistry.ids().map((weaponId, i) => ({
+    id: `default-${weaponId}`,
+    radius: 32,
+    maxHp: 100,
+    initialPosition: { x: 180, y: 180 },
+    initialVelocity: { x: 180, y: 90 },
+    weapons: [{ weaponId }],
+    raceId: 'human',
+    appearance: { type: 'color', value: DEFAULT_COLORS[i % DEFAULT_COLORS.length]! },
+  }))
 }
 
 /**

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, watchEffect, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, watchEffect, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import type { BallConfig, DuelConfig } from '~/engine/config'
 import { engineVersion } from '~/engine/engine'
 import { SEED_MAX } from '~/engine/rng'
@@ -12,6 +12,7 @@ import { useLibraryStore } from '~/stores/library'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { raceRegistry } from '~/engine/races/registry'
 import { defaultBalls, hpBarFraction, placeForDuel } from '~/utils/duel'
+import { spriteSource } from '~/assets/sprites/manifest'
 import '~/engine/weapons/index' // populate the registry
 
 // Arena configured into a Duel_Config before running (Req 11.4).
@@ -34,7 +35,13 @@ const candidates = computed<Candidate[]>(() => {
   const usable = (c: BallConfig) =>
     c.weapons.every((w) => weaponRegistry.has(w.weaponId)) && (c.raceId === undefined || raceRegistry.has(c.raceId))
   return [
-    ...defaultBalls().map((c) => ({ key: `default:${c.id}`, name: c.id, source: 'default' as const, config: c, usable: true })),
+    ...defaultBalls().map((c) => ({
+      key: `default:${c.id}`,
+      name: weaponRegistry.get(c.weapons[0]!.weaponId)?.name ?? c.id,
+      source: 'default' as const,
+      config: c,
+      usable: true,
+    })),
     ...library.balls.map((b) => ({
       key: `library:${b.id}`,
       name: b.name || b.config.id,
@@ -45,7 +52,7 @@ const candidates = computed<Candidate[]>(() => {
   ]
 })
 // Selection order = start slot (first = left, second = right).
-const selectedIds = ref<string[]>(['default:default-red', 'default:default-blue'])
+const selectedIds = ref<string[]>(defaultBalls().slice(0, 2).map((c) => `default:${c.id}`))
 
 const selected = computed(() =>
   selectedIds.value
@@ -92,6 +99,53 @@ let recorder: Recorder | null = null
 let recStart = 0
 
 watch(soundEnabled, (v) => audio.setEnabled(v))
+
+// Weapon sprites carry transparent padding (the shuriken is ~14px in a 32px
+// canvas), so icons are cropped to their visible pixels and then scaled to fit.
+const croppedIcons = ref<Record<string, string>>({})
+
+function cropToContent(src: string): void {
+  const img = new Image()
+  img.onload = () => {
+    const c = document.createElement('canvas')
+    c.width = img.width
+    c.height = img.height
+    const ctx = c.getContext('2d')
+    if (!ctx) return
+    ctx.drawImage(img, 0, 0)
+    const { data } = ctx.getImageData(0, 0, c.width, c.height)
+    let x0 = c.width, y0 = c.height, x1 = -1, y1 = -1
+    for (let y = 0; y < c.height; y++) {
+      for (let x = 0; x < c.width; x++) {
+        if (data[(y * c.width + x) * 4 + 3]! === 0) continue
+        x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y)
+      }
+    }
+    if (x1 < 0) return
+    const out = document.createElement('canvas')
+    out.width = x1 - x0 + 1
+    out.height = y1 - y0 + 1
+    out.getContext('2d')?.drawImage(c, x0, y0, out.width, out.height, 0, 0, out.width, out.height)
+    croppedIcons.value = { ...croppedIcons.value, [src]: out.toDataURL() }
+  }
+  img.src = src
+}
+
+/** Cropped image of a ball's first weapon sprite, or null to fall back to the color dot. */
+function weaponIcon(c: BallConfig): string | null {
+  const spriteId = weaponRegistry.get(c.weapons[0]?.weaponId ?? '')?.spriteId
+  const src = spriteId ? spriteSource(spriteId) : null
+  if (src?.kind !== 'image') return null
+  return croppedIcons.value[src.src] ?? src.src // uncropped until onMounted finishes
+}
+
+onMounted(() => {
+  for (const id of weaponRegistry.ids()) {
+    const spriteId = weaponRegistry.get(id)?.spriteId
+    const src = spriteId ? spriteSource(spriteId) : null
+    if (src?.kind === 'image') cropToContent(src.src)
+  }
+})
 
 function toggle(id: string): void {
   const i = selectedIds.value.indexOf(id)
@@ -216,7 +270,15 @@ onBeforeUnmount(() => {
               :disabled="!b.usable"
               @change="toggle(b.key)"
             >
+            <img
+              v-if="weaponIcon(b.config)"
+              :src="weaponIcon(b.config)!"
+              alt=""
+              class="h-8 w-8 shrink-0 -rotate-45 object-contain"
+              style="image-rendering: pixelated"
+            >
             <span
+              v-else
               class="inline-block h-3 w-3 shrink-0 rounded-full border border-black"
               :style="{ background: b.config.appearance?.type === 'color' ? b.config.appearance.value : '#c0cbdc' }"
               aria-hidden="true"
