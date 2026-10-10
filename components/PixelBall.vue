@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import {
+  BALL_CIRCLE, BALL_OUTLINE_COLOR, BALL_OUTLINE_OFFSETS, BALL_SHADE, BALL_SHADE_STYLE, BALL_SHINE, BALL_SHINE_STYLE, rectsToPath,
+} from '~/utils/pixelBall'
+
 type BallColor = 'blue' | 'red'
 
 const props = withDefaults(defineProps<{
@@ -11,10 +15,10 @@ const props = withDefaults(defineProps<{
 })
 
 // 12×12 pixel circle, drawn on a 14×14 grid so a 1px outline fits around it.
-const CIRCLE = 'M4 0h4v1h-4zM2 1h8v1h-8zM1 2h10v2h-10zM0 4h12v4h-12zM1 8h10v2h-10zM2 10h8v1h-8zM4 11h4v1h-4z'
-const SHADE = 'M10 5h2v3h-2zM8 8h3v2h-3zM5 10h5v1h-5z'
-const SHINE = 'M3 2h3v1h-3zM2 3h1v2h-1z'
-const OUTLINE_OFFSETS = ['0 1', '2 1', '1 0', '1 2']
+const CIRCLE = rectsToPath(BALL_CIRCLE)
+const SHADE = rectsToPath(BALL_SHADE)
+const SHINE = rectsToPath(BALL_SHINE)
+const OUTLINE_OFFSETS = BALL_OUTLINE_OFFSETS.map(([x, y]) => `${x} ${y}`)
 
 interface Palette { fill: string, shade: string, shine: string, shadeOpacity: number, shineOpacity: number }
 
@@ -26,7 +30,13 @@ const PALETTES: Record<BallColor, Palette> = {
 // A free fill color gets a translucent dark shade and light shine on top.
 const palette = computed<Palette>(() =>
   props.fill
-    ? { fill: props.fill, shade: '#181425', shine: '#ffffff', shadeOpacity: 0.35, shineOpacity: 0.55 }
+    ? {
+        fill: props.fill,
+        shade: BALL_SHADE_STYLE.color,
+        shine: BALL_SHINE_STYLE.color,
+        shadeOpacity: BALL_SHADE_STYLE.opacity,
+        shineOpacity: BALL_SHINE_STYLE.opacity,
+      }
     : PALETTES[props.color],
 )
 </script>
@@ -37,7 +47,7 @@ const palette = computed<Palette>(() =>
       v-for="offset in OUTLINE_OFFSETS"
       :key="offset"
       :transform="`translate(${offset})`"
-      fill="#181425"
+      :fill="BALL_OUTLINE_COLOR"
       :d="CIRCLE"
     />
     <path transform="translate(1 1)" :fill="palette.fill" :d="CIRCLE" />

@@ -12,6 +12,7 @@ import { useLibraryStore } from '~/stores/library'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { raceRegistry } from '~/engine/races/registry'
 import { defaultBalls, hpBarFraction, placeForDuel } from '~/utils/duel'
+import { BALL_DEFAULT_FILL } from '~/utils/pixelBall'
 import { spriteSource } from '~/assets/sprites/manifest'
 import '~/engine/weapons/index' // populate the registry
 import '~/engine/races/index'
@@ -20,7 +21,7 @@ definePageMeta({ middleware: 'auth' })
 
 // Arena configured into a Duel_Config before running (Req 11.4).
 const arena = { width: 360, height: 360 } // 1:1
-// A fresh seed per Start; Rematch reuses it, so the duel replays identically.
+// A fresh seed per Start and per Rematch, so every duel starts from new positions.
 const seed = ref(0)
 
 interface Candidate {
@@ -143,7 +144,7 @@ function weaponIcon(c: BallConfig): string | null {
 }
 
 function ballFill(c: BallConfig): string {
-  return c.appearance?.type === 'color' ? c.appearance.value : '#c0cbdc'
+  return c.appearance?.type === 'color' ? c.appearance.value : BALL_DEFAULT_FILL
 }
 
 /** "Race · HP" line for a fighter card; the race supplies HP when set. */
@@ -173,31 +174,60 @@ function toggle(id: string): void {
   else selectedIds.value.push(id)
 }
 
-function startDuel(record = false): void {
-  if (!canStart.value) return
+/** A duel config with a fresh seed and the start positions it derives. */
+function newDuelConfig(): DuelConfig {
   seed.value = Math.floor(Math.random() * (SEED_MAX + 1)) // UI-side randomness; the engine stays seeded
-  recError.value = ''
-  const config: DuelConfig = {
+  return {
     engineVersion,
     seed: seed.value,
     // Random, well-separated starts derived from the seed (any pair, default or Library).
     ballConfigs: placeForDuel(selected.value.map((c) => c.config), arena, seed.value),
     arenaConfig: arena,
   }
-  duelNames.value = selected.value.map((c) => c.name)
+}
+
+let stopDuelWatchers: (() => void) | null = null
+
+/** Stop the running duel: its loop, its sounds and its HP/winner mirror. */
+function stopDuel(): void {
+  stopDuelWatchers?.()
+  stopDuelWatchers = null
   duel?.dispose()
+  duel = null
+}
+
+/** Back to the picker. The duel stops for real. A recording of a finished duel
+ *  is still saved by the pending winner timeout; one cut off mid-fight is dropped. */
+function backToPicker(): void {
+  const finished = winner.value !== undefined
+  stopDuel()
+  if (recorder && !finished) {
+    void recorder.stop()
+    recorder = null
+    autoRecording.value = false
+  }
+  winner.value = undefined
+  running.value = false
+}
+
+function startDuel(record = false): void {
+  if (!canStart.value) return
+  recError.value = ''
+  const config = newDuelConfig()
+  duelNames.value = selected.value.map((c) => c.name)
+  stopDuel()
   duel = useVersusDuel(canvasEl, config, seed.value, settings.simulationSpeed, {
     showHitboxes: showHitboxes.value,
     reducedMotion: prefersReducedMotion,
     names: duelNames.value,
   })
   // Mirror the shallowRefs into local reactive refs for the template.
-  watchEffect(() => {
+  const stopMirror = watchEffect(() => {
     hp.value = duel!.view.hp.value
     winner.value = duel!.view.winner.value
   })
   // Play a synthesized sound per engine event (Req 14.5).
-  watch(
+  const stopSounds = watch(
     () => duel!.view.lastEvent.value,
     (e) => {
       if (!e) return
@@ -206,6 +236,10 @@ function startDuel(record = false): void {
       else if (e.type === 'matchEnded') audio.play('win')
     },
   )
+  stopDuelWatchers = () => {
+    stopMirror()
+    stopSounds()
+  }
   running.value = true
   duel.start()
 
@@ -259,12 +293,11 @@ async function finishRecording(): Promise<void> {
 }
 
 function rematch(): void {
-  duel?.rematch()
+  duel?.rematch(newDuelConfig())
 }
 
 onBeforeUnmount(() => {
-  duel?.dispose() // Req 11.11
-  duel = null
+  stopDuel() // Req 11.11
   void recorder?.stop()
   recorder = null
   audio.dispose()
@@ -458,7 +491,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="px-btn-slate h-14 flex-[1_1_180px] font-pixel text-sm"
-          @click="running = false"
+          @click="backToPicker"
         >
           BACK
         </button>

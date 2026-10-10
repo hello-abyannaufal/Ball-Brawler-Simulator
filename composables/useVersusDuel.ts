@@ -6,6 +6,10 @@ import { createEngine, TIMESTEP, type Engine } from '~/engine/engine'
 import { useSprites } from '~/composables/useSprites'
 import { usePixelFont } from '~/composables/usePixelFont'
 import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
+import {
+  BALL_CIRCLE, BALL_DEFAULT_FILL, BALL_GRID, BALL_OUTLINE_COLOR, BALL_OUTLINE_OFFSETS,
+  BALL_SHADE, BALL_SHADE_STYLE, BALL_SHINE, BALL_SHINE_STYLE, type PixelRect,
+} from '~/utils/pixelBall'
 import '~/engine/weapons/index'
 import { weaponRegistry } from '~/engine/weapons/registry'
 
@@ -24,7 +28,8 @@ export interface VersusView {
 export interface VersusDuel {
   view: VersusView
   start(): void
-  rematch(): void
+  /** Restart with a new config (fresh seed and start positions). */
+  rematch(next: DuelConfig): void
   dispose(): void
 }
 
@@ -478,27 +483,34 @@ export function useVersusDuel(
     ctx.strokeRect(0, 0, width, height)
   }
 
+  /** The same pixel-art ball as the fighter picker (PixelBall.vue): the 14×14
+   *  sprite, outline included, spans the hitbox diameter. Cell edges snap to
+   *  whole pixels so the pixels stay crisp at any ball size. */
   function drawBall(ctx: CanvasRenderingContext2D, b: Ball): void {
-    ctx.save()
-    ctx.beginPath()
-    ctx.arc(b.position.x, b.position.y, b.radius, 0, Math.PI * 2)
-    ctx.clip()
     const app = findAppearance(b.id)
-    if (app?.type === 'color') {
-      ctx.fillStyle = app.value
-      ctx.fillRect(b.position.x - b.radius, b.position.y - b.radius, b.radius * 2, b.radius * 2)
-    } else {
-      // pattern/image handled later; default solid fallback
-      ctx.fillStyle = '#c0cbdc'
-      ctx.fillRect(b.position.x - b.radius, b.position.y - b.radius, b.radius * 2, b.radius * 2)
+    const fill = app?.type === 'color' ? app.value : BALL_DEFAULT_FILL // pattern/image handled later
+    const cell = (b.radius * 2) / (BALL_GRID + 2)
+    const left = b.position.x - b.radius
+    const top = b.position.y - b.radius
+    const rects = (list: readonly PixelRect[], dx: number, dy: number) => {
+      for (const [x, y, w, h] of list) {
+        const x0 = Math.round(left + (x + dx) * cell)
+        const y0 = Math.round(top + (y + dy) * cell)
+        ctx.fillRect(x0, y0, Math.round(left + (x + dx + w) * cell) - x0, Math.round(top + (y + dy + h) * cell) - y0)
+      }
     }
+    ctx.save()
+    ctx.fillStyle = BALL_OUTLINE_COLOR
+    for (const [dx, dy] of BALL_OUTLINE_OFFSETS) rects(BALL_CIRCLE, dx, dy)
+    ctx.fillStyle = fill
+    rects(BALL_CIRCLE, 1, 1)
+    ctx.globalAlpha = BALL_SHADE_STYLE.opacity
+    ctx.fillStyle = BALL_SHADE_STYLE.color
+    rects(BALL_SHADE, 1, 1)
+    ctx.globalAlpha = BALL_SHINE_STYLE.opacity
+    ctx.fillStyle = BALL_SHINE_STYLE.color
+    rects(BALL_SHINE, 1, 1)
     ctx.restore()
-    // outline for retro pop
-    ctx.strokeStyle = EDG.wall
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    ctx.arc(b.position.x, b.position.y, b.radius, 0, Math.PI * 2)
-    ctx.stroke()
   }
 
   function findAppearance(id: EntityId) {
@@ -727,9 +739,11 @@ export function useVersusDuel(
     })
   }
 
-  function rematch(): void {
+  function rematch(next: DuelConfig): void {
     cancel()
-    build() // same seed + config → identical duel (Req 11.10)
+    duel = next
+    seed = next.seed
+    build()
     lastTime = 0
     acc = 0
     hitStop = 0
