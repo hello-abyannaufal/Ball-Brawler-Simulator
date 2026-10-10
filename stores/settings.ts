@@ -10,6 +10,17 @@ export const ASPECT_PRESETS = {
 } as const
 export type AspectRatio = keyof typeof ASPECT_PRESETS
 
+/** Output quality presets: the short side of the canvas/recording in px. */
+export const VIDEO_QUALITIES = [480, 720, 1080] as const
+export type VideoQuality = (typeof VIDEO_QUALITIES)[number]
+
+/** Resolution for a ratio at a quality, rounded to even sizes (H.264 needs them). */
+export function presetSize(ratio: AspectRatio, quality: VideoQuality): { width: number; height: number } {
+  const p = ASPECT_PRESETS[ratio]
+  const even = (v: number) => Math.round((v * quality) / 1080 / 2) * 2
+  return { width: even(p.width), height: even(p.height) }
+}
+
 export const RESOLUTION_MIN = 1
 export const RESOLUTION_MAX = 7680
 export const SPEED_MIN = 0.1
@@ -19,13 +30,14 @@ export interface SettingsState {
   width: number // integer 1–7680 (Req 15.1)
   height: number // integer 1–7680
   aspectRatio: AspectRatio
+  quality: VideoQuality
   sound: boolean
   simulationSpeed: number // 0.1–10.0
 }
 
 /** Defaults (Req 15.2): 9:16, 1080×1920, sound on, speed 1.0. */
 export function defaultSettings(): SettingsState {
-  return { width: 1080, height: 1920, aspectRatio: '9:16', sound: true, simulationSpeed: 1 }
+  return { width: 1080, height: 1920, aspectRatio: '9:16', quality: 1080, sound: true, simulationSpeed: 1 }
 }
 
 function isResolution(v: unknown): v is number {
@@ -47,6 +59,7 @@ export function sanitizeSettings(raw: unknown): SettingsState {
       typeof r.aspectRatio === 'string' && r.aspectRatio in ASPECT_PRESETS
         ? (r.aspectRatio as AspectRatio)
         : d.aspectRatio,
+    quality: VIDEO_QUALITIES.includes(r.quality as VideoQuality) ? (r.quality as VideoQuality) : d.quality,
     sound: typeof r.sound === 'boolean' ? r.sound : d.sound,
     simulationSpeed:
       typeof speed === 'number' && Number.isFinite(speed) && speed >= SPEED_MIN && speed <= SPEED_MAX
@@ -61,11 +74,16 @@ export const useSettingsStore = defineStore('settings', {
   },
 
   actions: {
-    /** Pick an aspect ratio and apply its preset resolution. */
+    /** Pick an aspect ratio and apply its preset resolution at the current quality. */
     setAspectRatio(ratio: AspectRatio): void {
       this.aspectRatio = ratio
-      this.width = ASPECT_PRESETS[ratio].width
-      this.height = ASPECT_PRESETS[ratio].height
+      this.$patch(presetSize(ratio, this.quality))
+    },
+
+    /** Pick an output quality and apply it to the current aspect ratio. */
+    setQuality(quality: VideoQuality): void {
+      this.quality = quality
+      this.$patch(presetSize(this.aspectRatio, quality))
     },
 
     /** Apply a partial update, keeping only in-bound values. */

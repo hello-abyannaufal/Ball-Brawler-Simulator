@@ -6,6 +6,7 @@ import {
   RESOLUTION_MAX,
   SPEED_MIN,
   SPEED_MAX,
+  VIDEO_QUALITIES,
   type AspectRatio,
 } from '~/stores/settings'
 
@@ -48,6 +49,33 @@ function onNumber(field: 'width' | 'height' | 'simulationSpeed', ev: Event): voi
         </div>
         <p class="text-xl leading-tight text-edg-fog">
           Choosing a ratio applies its preset resolution.
+        </p>
+      </fieldset>
+
+      <fieldset class="px-panel flex min-w-0 flex-col gap-4 px-5 pb-6 pt-[22px]">
+        <legend class="float-left font-pixel text-xs text-edg-sand">
+          VIDEO QUALITY
+        </legend>
+        <div class="grid grid-cols-3 gap-3">
+          <label
+            v-for="q in VIDEO_QUALITIES"
+            :key="q"
+            class="flex h-12 cursor-pointer items-center justify-center font-pixel text-[11px] shadow-[0_0_0_4px_#181425] focus-within:outline focus-within:outline-4 focus-within:outline-offset-4 focus-within:outline-[#2ce8f5]"
+            :class="settings.quality === q ? 'bg-edg-gold text-edg-ink' : 'bg-edg-night text-white'"
+          >
+            <input
+              type="radio"
+              name="quality"
+              class="sr-only"
+              :value="q"
+              :checked="settings.quality === q"
+              @change="settings.setQuality(q)"
+            >
+            {{ q }}p
+          </label>
+        </div>
+        <p class="text-xl leading-tight text-edg-fog">
+          Sets the resolution for the chosen ratio. Recordings save as MP4 where the browser supports it.
         </p>
       </fieldset>
 
