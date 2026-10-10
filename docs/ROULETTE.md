@@ -126,7 +126,7 @@ Race  →  Weapon  →  Trait  →  Ability  →  (nama + Save)
 
 | Roda | Isi | Status |
 |---|---|---|
-| Race | Tubuh bola: HP, radius, speed, damageTaken, weaponSpin (`engine/races/`) | ✅ ada (Tier 1: Human, Elf, Orc) |
+| Race | Tubuh bola: HP, radius, speed, damageTaken, weaponSpin (`engine/races/`) | ✅ ada (Tier 1: Human, Elf, Orc; Tier 2: Dwarf, Goblin, Giant) |
 | Weapon | Senjata (sword, spear, hammer, bow, scythe, …) | ✅ ada |
 | Trait | Efek **pasif** (mis. vampiric, regen, spike) | ⏳ belum ada sistemnya |
 | Ability | Skill **aktif** dengan cooldown (mis. dash, invisibility) | ⏳ belum ada sistemnya |

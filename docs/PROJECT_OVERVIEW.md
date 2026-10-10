@@ -78,11 +78,19 @@ diresolusi engine lewat `ballStats()` seperti weapon). Bola lama tanpa race mema
 | Human | 100 | 32 | ×1.00 | ×1.00 | ×1.00 |
 | Elf | 85 | 28 | ×1.20 | ×1.00 | ×1.15 |
 | Orc | 115 | 36 | ×0.85 | ×1.00 | ×0.85 |
+| Dwarf | 88 | 28 | ×0.90 | ×0.90 | ×1.00 |
+| Goblin | 88 | 24 | ×1.30 | ×1.00 | ×1.05 |
+| Giant | 130 | 44 | ×0.70 | ×1.00 | ×0.80 |
 
 - `speed` mengalikan kecepatan awal & `cruiseSpeed`; `damageTaken` mengalikan setiap damage
   yang masuk (di `applyDamage`); `weaponSpin` mengalikan putaran semua weapon (termasuk sapuan
   bidik Bow, tapi bukan interval tembak).
-- Tier 2 (Dwarf, Goblin, Giant) menyusul setelah Tier 1 stabil.
+- Tier 2 (Dwarf, Goblin, Giant) ditambahkan di engine 1.8.0. Yang menentukan menang adalah
+  **HP efektif** (`maxHp / damageTaken`); radius kecil hanya sedikit membantu. Versi awal
+  Dwarf (HP efektif 124) menang 71%, Goblin (64) 24.5%.
+- Win rate per race (engine 1.8.0, `--axes weapon,race --runs 20 --seed 777`): Dwarf 51.4%,
+  Goblin 50.9%, Orc 49.4%, Human 49.3%, Giant 48.9%, Elf 48.6%. Per weapon masih timpang
+  (mis. Revolver 31.6% di Goblin, 48.3% di Dwarf).
 
 | Atribut lain | Nilai |
 |---|---|

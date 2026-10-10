@@ -18,7 +18,7 @@ import {
   weaponTouchesPath,
 } from './weapons/combat'
 
-export const engineVersion = '1.7.0' // non-empty string (Req 5.8)
+export const engineVersion = '1.8.0' // non-empty string (Req 5.8)
 export const TIMESTEP = 1 / 60 // seconds (Req 5.4)
 
 /** Knockback impulse magnitude applied on a weapon hit. */
