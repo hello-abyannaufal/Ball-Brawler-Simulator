@@ -62,4 +62,25 @@ describe('projectile vs projectile', () => {
     expect(q.alive).toBe(true)
   })
 
+  it('a projectile with knockback shoves the ball it hits along its flight', () => {
+    const ball = (id: string, x: number) => ({
+      id, radius: 20, maxHp: 100,
+      initialPosition: { x, y: 180 }, initialVelocity: { x: 0, y: 0 },
+      weapons: [],
+    })
+    const e = createEngine({
+      seed: 1,
+      config: { engineVersion, seed: 1, arenaConfig: arena, ballConfigs: [ball('a', 40), ball('b', 300)] },
+    })
+    const [a, b] = e.world.entities.filter((x): x is Ball => x.kind === 'ball')
+    e.world.add({
+      id: e.world.allocateId(), kind: 'projectile', alive: true,
+      position: { x: 240, y: 180 }, velocity: { x: 320, y: 0 },
+      radius: 3, damage: 2, ownerId: a!.id, blockable: true, weaponId: 'revolver', knockback: 25,
+    })
+    for (let i = 0; i < 10 && b!.hp === 100; i++) e.step()
+    expect(b!.hp).toBeLessThan(100)
+    expect(b!.velocity.x).toBeGreaterThan(20)
+    expect(Math.abs(b!.velocity.y)).toBeLessThan(1e-9)
+  })
 })

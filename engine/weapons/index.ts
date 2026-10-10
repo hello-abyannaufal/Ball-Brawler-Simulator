@@ -4,6 +4,7 @@ export { hammer } from './hammer'
 export { spear } from './spear'
 export { bow } from './bow'
 export { scythe } from './scythe'
+export { revolver } from './revolver'
 
 export { weaponRegistry, WeaponRegistry } from './registry'
 export type {

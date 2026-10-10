@@ -78,11 +78,12 @@ that copy holds the exact same pixel map, so the art can be regenerated from it.
 
 | Asset | Size | Status | Where / notes |
 | ----- | ---- | ------ | ------------- |
-| Weapon sprites (sword, hammer, spear, bow, scythe) | 32×32 (spear 48×12) | ✅ PNG | `public/sprites/weapons/`; also used on the roulette wheel, Versus/Library cards (cropped), menu and splash |
+| Weapon sprites (sword, hammer, spear, bow, scythe, revolver) | 32×32 (spear 48×12) | ✅ PNG | `public/sprites/weapons/`; also used on the roulette wheel, Versus/Library cards (cropped), menu and splash |
 | Weapon procedural fallbacks | — | 🧩 Code | `weapon:<id>:proc`; simple shapes for sword, hammer, spear, bow; scythe is an exact pixel copy of its PNG |
 | Status icons (poison, slow, stun) | 8×8, drawn 2× | ✅ PNG | `public/sprites/icons/status/`, id `status:<status id>`; in-frame HUD |
 | Status icons (freeze, frozen) | 8×8 | ⏳ Planned | with the Freeze status |
 | Arrow projectile | 12×5, drawn 2× | 🧩 Code | `projectile:arrow`; pivot on the tip, where the hit circle is |
+| Bullet projectile | 6×3, drawn 2× | 🧩 Code | `projectile:bullet` (Revolver); brass casing, steel tip, pivot on the tip |
 | Hit flash (projectile) | 32×32 | 🧩 Code | `fx:hit-projectile`, concentric diamond; only projectile hits flash |
 | Blood burst, sparks, clash flash | particles | 🧩 Code | `useVersusDuel.ts`, render-only |
 | Shockwave (wall slam gray, parry white) | ring | 🧩 Code | `useVersusDuel.ts`, render-only |
@@ -128,6 +129,7 @@ All weapons orbit their ball. Sizes are arena units; the sprite is scaled by
 | spear  | 72 | segment 72 × 8  | (6, 6)   | 42 | 1.71 | very long thin shaft, fills the 48px canvas |
 | bow    | 24 | segment 24 × 8  | (19, 16) | 10 | 2.40 | bow body; damage comes from its arrows |
 | scythe | 46 | circle r14 (blade, at the tip) | (5, 12) | 25 | 1.84 | curved blade at the tip, curling back over the shaft |
+| revolver | 30 | segment 30 × 8 | (8, 14) | 21 | 1.43 | barrel axis through the pivot, so the barrel points where it aims; grip hangs below |
 
 ---
 
@@ -146,10 +148,15 @@ All weapons orbit their ball. Sizes are arena units; the sprite is scaled by
 5. **scythe.png** — long wooden shaft with a purple grip wrap, a crescent steel
    blade at the tip curling up and back, bright edge on the inner curve
    (pivot (5, 12)).
+6. **revolver.png** — steel barrel pointing right with a fluted cylinder, hammer
+   on top, trigger guard below, wooden grip slanting down and back. Pivot (8, 14)
+   on the barrel axis; muzzle at x 29. Its procedural fallback is an exact pixel
+   copy.
 
 A new weapon needs: its PNG here, a `weapon:<id>` manifest entry (plus
 `weapon:<id>:proc` if wanted), and `spriteId`, `pivot`, `spriteReach` on its
-definition.
+definition. A ranged weapon also sets `projectileSprite` (sprite id + pivot on
+the projectile's hit circle).
 
 ### Status icons (8×8), transparent — HUD, drawn at 2×
 

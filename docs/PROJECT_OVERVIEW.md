@@ -108,6 +108,7 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 | **Spear** | 72 | 6 | 3.0 | 8 | 600 | segment 72 × 8 |
 | **Bow** | 24 | 0 (lewat panah) | 2.8 | 5 | 400 | segment 24 × 8 |
 | **Scythe** | 46 | 6 | 3.6 | 15 | 800 | circle r14 (bilah) |
+| **Revolver** | 30 | 0 (lewat peluru) | 3.0 | 7 | 400 | segment 30 × 8 |
 
 ### 3.2 Skill unik per weapon
 
@@ -129,6 +130,11 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
   (800 ms), jadi reap tidak bisa berantai. Rata-rata ≈ 2.2 hit per reap (maks ≈ 7); win rate
   46% (20 seed × kedua slot vs 5 weapon lain), lemah vs Bow (15%). Renderer: swing trail abu-abu
   selama reap.
+- **Revolver — Shooter + aim lock** (`shooter` dengan `magazine` + `aimLock`): saat lawan masuk
+  ±6° dan peluru masih ada, revolver **berhenti berputar** dan menembak beruntun (tiap 6 step)
+  selama lawan tetap dalam ±20°. Magazine **6 peluru** (speed 520, radius 3, damage 2,
+  knockback 25 searah tembakan), lalu reload **225 step (3.75 s)** sambil berputar lagi.
+  Peluru bisa ditepis / dipantulkan riposte seperti panah; revolver yang diam mudah di-clash.
 
 ### 3.3 Aturan combat umum
 
@@ -148,10 +154,10 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 
 ### 3.4 Status balance terakhir
 
-Win rate (engine 1.1.0, 20 seed × kedua slot, batas 90 s): Sword 62%, Hammer 68%, Spear 44%,
-Shuriken 33%, Bow 43%. **Matchup individual masih timpang** (mis. Hammer 75% vs Sword,
-Sword 78% vs Spear/Shuriken, Spear 83% vs Shuriken).
-(Angka historis; Shuriken sudah dihapus di engine 1.4.0.)
+Win rate per weapon, pooled atas semua race (engine 1.6.0,
+`npm run sim -- --axes weapon,race --runs 40 --seed 777`): Hammer 57%, Sword 52%, Scythe 51%,
+Bow 49%, Revolver 48%, Spear 41%. **Matchup individual masih timpang** (race Human,
+`--runs 100`): Sword 81% vs Spear, Revolver 74% vs Spear tapi 40% vs Bow, Hammer 68% vs Sword.
 Perubahan kecil bisa membalik seluruh matchup — ukur ulang setelah tiap perubahan stat.
 
 ### 3.5 Menambah weapon

@@ -144,6 +144,33 @@ const scytheProc = gridProc({
   '.........................KKKK...',
 ], 4)
 
+// Revolver: the same pixels as revolver.png.
+const revolverProc = gridProc({
+  K: C.ink, W: C.white, l: C.steel, d: C.steelDark, s: '#5a6988',
+  w: C.wood, t: '#e4a672', k: C.woodDark,
+}, [
+  '.......KKK......................',
+  '.......KdKKKKKKKK...............',
+  '......KdddKllllllK.........K....',
+  '......KlllKddddddKKKKKKKKKKKKK..',
+  '......KdddKdsdsddKWWWWWWWWWWWK..',
+  '......KdddKddddddKlllllllllllK..',
+  '......KsssKdsdsddKdddddddddddK..',
+  '.....KwwwwKddddddKKKKKKKKKKKKK..',
+  '.....KtwwkKssssssK..............',
+  '.....KtwwkKKKKKKKK..............',
+  '....KtwwkK.Kd..K................',
+  '....KtwwkK..KKKK................',
+  '...KtwwkK.......................',
+  '...KtwwkK.......................',
+  '..KtwwkK........................',
+  '..KwwwkK........................',
+  '..KKKKKK........................',
+], 9)
+
+// Bullet (6×3) pointing RIGHT: brass casing, steel tip.
+const bulletProc = gridProc({ K: C.ink, Y: C.gold, l: C.steel }, ['.KKKK.', 'KYYYlK', '.KKKK.'])
+
 // ---- Status icons (8×8, drawn at 2× in the HUD); same art as the PNGs ----
 const STATUS_COLORS: Record<string, string> = {
   K: C.ink, W: C.white, G: C.green, g: '#3e8948', B: C.blue, b: '#124e89',
@@ -166,9 +193,11 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'weapon:spear': { kind: 'image', src: '/sprites/weapons/spear.png', width: SIZE_SPEAR_W, height: SIZE_SPEAR_H },
   'weapon:bow': { kind: 'image', src: '/sprites/weapons/bow.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:scythe': { kind: 'image', src: '/sprites/weapons/scythe.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
+  'weapon:revolver': { kind: 'image', src: '/sprites/weapons/revolver.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
 
   // Projectiles — procedural until PNGs exist.
   'projectile:arrow': { kind: 'procedural', width: 12, height: 5, draw: arrowProc },
+  'projectile:bullet': { kind: 'procedural', width: 6, height: 3, draw: bulletProc },
 
   // Hit-flash FX.
   'fx:hit-projectile': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hitProjectileProc },
@@ -188,6 +217,7 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'weapon:spear:proc': { kind: 'procedural', width: SIZE_SPEAR_W, height: SIZE_SPEAR_H, draw: spearProc },
   'weapon:bow:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: bowProc },
   'weapon:scythe:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: scytheProc },
+  'weapon:revolver:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: revolverProc },
 }
 
 /** Resolve a spriteId to its source, or the placeholder when unknown. */
