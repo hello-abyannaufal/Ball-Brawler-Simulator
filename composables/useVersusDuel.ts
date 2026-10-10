@@ -110,6 +110,15 @@ const TRAIL_COLORS: Record<string, string[]> = {
 }
 const RIPOSTE_TRAIL_INNER = 0.35 // trail covers the blade from 35% of its length to the tip
 
+/** Blocked projectile: it glances off the blocking weapon, veering toward the
+ *  blade's spin, slowing and tumbling, then fades out. Render-only. */
+const DEFLECT_LIFE = 0.45 // seconds
+const DEFLECT_FADE = 0.4 // last fraction of the life spent fading out
+const DEFLECT_SPEED = 0.35 // × the projectile's speed at the block
+const DEFLECT_TURN = Math.PI / 5 // veer toward the spin direction (36°)
+const DEFLECT_SPIN = 30 // rad/s tumble, in the blade's spin direction
+const DEFLECT_DRAG = 5
+
 /** Per-source hit-flash (Req 16.5, 16.6): a 32×32 pixel sprite at the impact,
  *  shaped differently per source (projectile = cross burst). Weapon hits have
  *  none: their blood burst is the feedback. */
@@ -140,6 +149,17 @@ interface Shockwave {
   life: number // seconds remaining
   radius: number // arena px at the end
   color: string
+}
+
+interface Deflected {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  angle: number
+  spin: number // rad/s
+  life: number // seconds remaining
+  spriteId: string
 }
 
 interface HitFlash {
@@ -191,6 +211,7 @@ export function useVersusDuel(
   let flashes: Flash[] = []
   let hitFlashes: HitFlash[] = []
   let shockwaves: Shockwave[] = []
+  let deflected: Deflected[] = []
   // Set by a `wallSlam` event; the damage event that follows uses its point.
   let pendingSlam: { ballId: EntityId; x: number; y: number } | null = null
   // Entity state before the latest step, for render interpolation.
@@ -225,6 +246,7 @@ export function useVersusDuel(
         } else if (e.type === 'projectileBlocked' || e.type === 'projectilesCollided') {
           if (reduced) return
           spawnSparksAt(e.x, e.y, SPARK_COUNT.parry)
+          if (e.type === 'projectileBlocked') spawnDeflected(e.projectileId, e.weaponId, e.x, e.y)
         } else if (e.type === 'projectileReflected') {
           if (reduced) return
           hitStop = Math.max(hitStop, CLASH_HIT_STOP)
@@ -372,6 +394,29 @@ export function useVersusDuel(
     }
   }
 
+  /** The blocked projectile glances off: slower, turned toward the blocker's
+   *  spin, tumbling the same way. */
+  function spawnDeflected(projectileId: EntityId, weaponId: EntityId, x: number, y: number): void {
+    const p = engine?.world.entities.find((e): e is Projectile => e.id === projectileId && e.kind === 'projectile')
+    const w = engine?.world.entities.find((e): e is WeaponEntity => e.id === weaponId && e.kind === 'weapon')
+    const spriteId = p && weaponRegistry.get(p.weaponId)?.projectileSprite?.id
+    if (!p || !w || !spriteId) return
+    const dir = Math.sign(w.angularSpeed) || 1
+    const heading = Math.atan2(p.velocity.y, p.velocity.x)
+    const turned = heading + dir * DEFLECT_TURN
+    const speed = Math.hypot(p.velocity.x, p.velocity.y) * DEFLECT_SPEED
+    deflected.push({
+      x,
+      y,
+      vx: Math.cos(turned) * speed,
+      vy: Math.sin(turned) * speed,
+      angle: heading,
+      spin: dir * DEFLECT_SPIN,
+      life: DEFLECT_LIFE,
+      spriteId,
+    })
+  }
+
   function updateParticles(dt: number): void {
     const kBlood = Math.exp(-BLOOD_DRAG * dt)
     const kSpark = Math.exp(-SPARK_DRAG * dt)
@@ -386,6 +431,25 @@ export function useVersusDuel(
     particles = particles.filter((p) => p.life > 0)
     for (const f of flashes) f.life -= dt
     flashes = flashes.filter((f) => f.life > 0)
+    const kDeflect = Math.exp(-DEFLECT_DRAG * dt)
+    for (const d of deflected) {
+      d.x += d.vx * dt
+      d.y += d.vy * dt
+      d.vx *= kDeflect
+      d.vy *= kDeflect
+      d.angle += d.spin * dt
+      d.life -= dt
+    }
+    deflected = deflected.filter((d) => d.life > 0)
+  }
+
+  /** Tumbling around the sprite's center; fades out at the end of its life. */
+  function drawDeflected(ctx: CanvasRenderingContext2D): void {
+    for (const d of deflected) {
+      ctx.globalAlpha = Math.min(1, d.life / (DEFLECT_LIFE * DEFLECT_FADE))
+      drawSprite(ctx, d.spriteId, d.x, d.y, 2, d.angle)
+    }
+    ctx.globalAlpha = 1
   }
 
   function updateHitFlashes(dt: number): void {
@@ -733,6 +797,7 @@ export function useVersusDuel(
       else if (e.kind === 'projectile' && e.alive) drawProjectile(ctx, e)
     }
     drawShockwaves(ctx)
+    drawDeflected(ctx)
     drawParticles(ctx)
     drawHitFlashes(ctx)
     drawHpBars(ctx)
@@ -917,6 +982,7 @@ export function useVersusDuel(
     flashes = []
     hitFlashes = []
     shockwaves = []
+    deflected = []
     pendingSlam = null
     raf = requestAnimationFrame(frame)
   }
