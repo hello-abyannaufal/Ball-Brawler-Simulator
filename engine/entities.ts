@@ -1,5 +1,5 @@
 import type { WeaponInstance, WeaponDefinition, Hitbox  } from './weapons/types'
-import type { StatusEffect } from './status'
+import type { ModifiableStat, StatusInstance } from './status'
 
 export type EntityId = number // monotonically increasing, stable order
 
@@ -23,13 +23,16 @@ export interface Ball extends BaseEntity {
   radius: number
   hp: number
   maxHp: number
+  /** Unmodified stats (race). The effective fields below are rebuilt from
+   *  these and active status modifiers every step (`recomputeStats`). */
+  readonly base: Readonly<Record<ModifiableStat, number>>
   cruiseSpeed: number // speed the ball eases back to after knockback
   damageTaken: number // × every incoming damage amount (race)
   weaponSpin: number // × the spin speed of every carried weapon (race)
   /** Pending wall-slam from a heavy hit (e.g. Hammer); null when none. */
   slam: { attackerId: EntityId; damage: number; steps: number } | null
   weapons: WeaponInstance[]
-  statusEffects: StatusEffect[]
+  statusEffects: StatusInstance[]
 }
 
 export interface Projectile extends BaseEntity {

@@ -6,7 +6,7 @@ import { World } from './world'
 import { createRng } from './rng'
 import { applyDamage } from './damage'
 import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback, launchAway } from './physics'
-import { runStatusEffects } from './status'
+import { runStatusEffects, recomputeStats, hasControl } from './status'
 import { CooldownTable } from './cooldown'
 import { weaponRegistry } from './weapons/registry'
 import { ballStats } from './races/registry'
@@ -75,6 +75,11 @@ export function createEngine(opts: EngineOptions): Engine {
       return { def, state: {} }
     })
     const stats = ballStats(bc) // race (or the config's own HP/radius)
+    const base = {
+      cruiseSpeed: Math.hypot(bc.initialVelocity.x, bc.initialVelocity.y) * stats.speed,
+      damageTaken: stats.damageTaken,
+      weaponSpin: stats.weaponSpin,
+    }
 
     const ball: Ball = {
       id: world.allocateId(),
@@ -85,9 +90,8 @@ export function createEngine(opts: EngineOptions): Engine {
       radius: stats.radius,
       hp: stats.maxHp,
       maxHp: stats.maxHp,
-      cruiseSpeed: Math.hypot(bc.initialVelocity.x, bc.initialVelocity.y) * stats.speed,
-      damageTaken: stats.damageTaken,
-      weaponSpin: stats.weaponSpin,
+      base,
+      ...base,
       weapons,
       statusEffects: [],
       slam: null,
@@ -214,7 +218,9 @@ export function createEngine(opts: EngineOptions): Engine {
         w.riposteSteps > 0 ? (w.def.riposte?.spinBoost ?? 1)
         : w.reapSteps > 0 ? (w.def.reap?.spinBoost ?? 1)
         : 1
-      w.angle += w.angularSpeed * boost * owner.weaponSpin * TIMESTEP
+      // Stunned (status): weapons hold still, and don't summon or fire.
+      const stunned = hasControl(owner, 'stun')
+      if (!stunned) w.angle += w.angularSpeed * boost * owner.weaponSpin * TIMESTEP
       if (w.stunSteps > 0) w.stunSteps -= 1
       if (w.riposteSteps > 0) w.riposteSteps -= 1
       if (w.reapSteps > 0) {
@@ -235,7 +241,7 @@ export function createEngine(opts: EngineOptions): Engine {
         y: owner.position.y + Math.sin(w.angle) * orbitRadius,
       }
 
-      if (w.def.summon) updateSummons(w, owner)
+      if (w.def.summon) updateSummons(w, owner, stunned)
 
       // Projectile weapons (e.g. Bow) fire only while facing an opponent AND
       // the cooldown is ready (Req 10.10). Range does not matter.
@@ -253,7 +259,7 @@ export function createEngine(opts: EngineOptions): Engine {
           facing = angleDiff(w.angle, toTarget) <= ((ps.facingDegrees ?? DEFAULT_FACING_DEGREES) * Math.PI) / 180
         }
 
-        if (ready && facing && target) {
+        if (ready && facing && target && !stunned) {
           weaponFireTimers.set(w.id, 0)
           // Aim at where the target WILL be (constant-velocity lead), so the
           // arrow actually flies at the opponent. Deterministic: positions only.
@@ -293,14 +299,14 @@ export function createEngine(opts: EngineOptions): Engine {
   /**
    * Summoner weapons (Shuriken): grow a ring of circling shurikens, then throw
    * the full ring in a fan at the opponent. Deterministic (step counters and
-   * positions only).
+   * positions only). While `stunned` the ring only follows the ball.
    */
-  function updateSummons(w: WeaponEntity, owner: Ball): void {
+  function updateSummons(w: WeaponEntity, owner: Ball, stunned: boolean): void {
     const cfg = w.def.summon!
     let ring = circlingOf(w)
 
     // Summon one more every intervalSteps while below the stack limit.
-    if (ring.length < cfg.maxStack) {
+    if (ring.length < cfg.maxStack && !stunned) {
       const t = (summonTimers.get(w.id) ?? 0) + 1
       if (t >= cfg.intervalSteps) {
         summonTimers.set(w.id, 0)
@@ -342,7 +348,7 @@ export function createEngine(opts: EngineOptions): Engine {
 
     // Full stack: throw the whole ring in a fan centered on the led opponent.
     const target = nearestOpponent(owner.id, owner.position)
-    if (ring.length >= cfg.maxStack && target) {
+    if (ring.length >= cfg.maxStack && target && !stunned) {
       const [dx, dy] = leadDirection(owner.position, target, cfg.throwSpeed)
       const center = Math.atan2(dy, dx)
       const spread = (cfg.spreadDegrees * Math.PI) / 180
@@ -446,6 +452,7 @@ export function createEngine(opts: EngineOptions): Engine {
       if (!owner) continue
       if (w.def.damage <= 0) continue
       if (w.stunSteps > 0) continue // disarmed
+      if (hasControl(owner, 'stun')) continue // owner stunned (status)
       if (clashedThisStep.has(w.id)) continue // blocked by a clash this step
       for (const ball of world.aliveBalls()) {
         if (ball.id === w.ownerId) continue
@@ -626,6 +633,9 @@ export function createEngine(opts: EngineOptions): Engine {
    * itself is still emitted exactly once.
    */
   function step(): void {
+    // (0) rebuild effective stats from base + active status modifiers
+    recomputeStats(world)
+
     // (1) move balls and weapons
     const slammed: Ball[] = [] // hit a wall while a slam was pending; damaged in (4)
     for (const ball of world.aliveBalls()) {

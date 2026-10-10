@@ -188,8 +188,11 @@ Penamaan sudah dikonfirmasi user: **Trait = efek pasif** (ke ball atau weapon),
 **Ability = skill aktif dengan cooldown**. Istilah "Skill" lama tidak dipakai lagi.
 Sistem skill lama (Vampire, Spike, Blaster, Splitter, Grower) **sudah dihapus**;
 kodenya di commit `548a969` bisa jadi referensi pola hook (`onTick`, `onHit`, `onHurt`,
-`onWallBounce`, `onDeath`). `engine/status.ts` (status effect berdurasi) masih ada dan
-cocok untuk efek Ability.
+`onWallBounce`, `onDeath`). `engine/status.ts` (status effect berdurasi) cocok untuk efek
+Trait/Ability: satu sistem untuk buff & debuff (`polarity`), pasang lewat `applyStatus()`,
+stat efektif dihitung ulang tiap step dari `ball.base` + modifier (`recomputeStats`).
+Debuff yang sudah ada: `slow` (modifier), `poison` (DoT, stack s/d 3), `stun` (control).
+Belum ada sumber yang memasangnya — weapon/Trait/Ability yang memakai status masih ⏳.
 
 Urutan roda Roulette yang dituju:
 

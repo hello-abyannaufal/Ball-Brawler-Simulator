@@ -211,7 +211,8 @@ Baca seluruh dokumen ini sebelum mengubah kode.
 - Sistem skill lama sudah **dihapus** (lihat task 16.8); kode lamanya ada di commit
   `548a969` dan bisa dijadikan referensi pola hook (`onHit`, `onHurt`, `onTick`, …)
   untuk Trait.
-- Status effect (`engine/status.ts`) masih ada dan cocok untuk efek berdurasi Ability
-  (invisible, regen, dll.).
+- Status effect (`engine/status.ts`) cocok untuk efek berdurasi Trait/Ability. Pasang lewat
+  `applyStatus()`; debuff `slow`/`poison`/`stun` sudah ada, buff tinggal tambah definisi
+  (`polarity: 'buff'`) di registry yang sama.
 - Konvensi repo: commit message bahasa Inggris dengan conventional commits, stage file
   spesifik (bukan `git add .`), konfirmasi user sebelum `git push`.

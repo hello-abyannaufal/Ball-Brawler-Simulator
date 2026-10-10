@@ -23,4 +23,8 @@ export type EngineEvent =
   | { type: 'projectileBlocked'; projectileId: EntityId; weaponId: EntityId; x: number; y: number }
   /** A slammed ball hit a wall at (x, y); a `damage` event follows. */
   | { type: 'wallSlam'; ballId: EntityId; attackerId: EntityId; x: number; y: number }
+  /** A status was added to a ball, or re-applied (refreshed / stacked). */
+  | { type: 'statusApplied'; ballId: EntityId; statusId: string; sourceId: EntityId | ''; stacks: number }
+  /** A status ran out on a ball. */
+  | { type: 'statusExpired'; ballId: EntityId; statusId: string }
   | { type: 'matchEnded'; winner: EntityId | null }
