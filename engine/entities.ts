@@ -42,9 +42,6 @@ export interface Projectile extends BaseEntity {
   ownerId: EntityId // credited attacker
   blockable: boolean // can be swatted out of the air by an opposing weapon
   weaponId: string // definition id of the weapon that made it (renderer picks the sprite)
-  orbiting: boolean // summoned and circling its owner, not thrown yet
-  orbitSlot: number // fixed ring slot while circling (0..maxStack-1); -1 otherwise
-  bounceSteps: number // > 0: reflects off walls instead of leaving the arena; counts down
 }
 
 export interface WeaponEntity extends BaseEntity {

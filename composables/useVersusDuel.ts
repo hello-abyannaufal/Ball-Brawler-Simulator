@@ -9,7 +9,6 @@ import {
   BALL_DEFAULT_FILL, BALL_OUTLINE_COLOR, BALL_SHADE_STYLE, BALL_SHINE_STYLE,
 } from '~/utils/pixelBall'
 import '~/engine/weapons/index'
-import { weaponRegistry } from '~/engine/weapons/registry'
 
 export interface HpView {
   id: EntityId
@@ -573,8 +572,7 @@ export function useVersusDuel(
 
   function drawWeapon(ctx: CanvasRenderingContext2D, w: WeaponEntity): void {
     const spriteId = w.def.spriteId
-    // Summoners (Shuriken) have no blade to draw; their shurikens are projectiles.
-    if (!spriteId || w.def.summon) return
+    if (!spriteId) return
     const anchor = gripAnchor(w)
     // Scale so the drawn grip→tip span equals the engine's weapon length:
     // what you see is exactly the hitbox.
@@ -640,14 +638,6 @@ export function useVersusDuel(
   }
 
   function drawProjectile(ctx: CanvasRenderingContext2D, p: Projectile): void {
-    const def = weaponRegistry.get(p.weaponId)
-    if (def?.summon && def.spriteId) {
-      // Shuriken: its weapon sprite at 2× (blade ≈ 28 px, hit radius 12),
-      // always spinning (render-only angle).
-      const spin = (engine!.world.tick * 0.45 + p.id) % (Math.PI * 2)
-      drawSprite(ctx, def.spriteId, p.position.x, p.position.y, 2, spin)
-      return
-    }
     // Point along the flight direction; pivot on the tip, where the engine's
     // hit circle is, so what you see is what hits.
     const angle = Math.atan2(p.velocity.y, p.velocity.x)

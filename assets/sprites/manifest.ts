@@ -79,30 +79,6 @@ const spearProc: ProceduralDraw = (ctx, w) => {
   px(ctx, 4, 5, w - 10, 2, C.wood) // shaft
   px(ctx, w - 6, 4, 4, 4, C.steel) // tip
 }
-/** Fallback if shuriken.png fails: 9×9 four-point shuriken, scaled to fit. */
-const SHURIKEN_9 = [
-  '....#....',
-  '...##....',
-  '...#L....',
-  '.#.LDL##.',
-  '##LDODL##',
-  '.##LDL.#.',
-  '....L#...',
-  '....##...',
-  '....#....',
-]
-const shurikenProc: ProceduralDraw = (ctx, w, h) => {
-  const k = Math.max(1, Math.floor(Math.min(w, h) / 9))
-  const ox = Math.floor((w - 9 * k) / 2)
-  const oy = Math.floor((h - 9 * k) / 2)
-  const col: Record<string, string> = { '#': C.steel, L: C.white, D: C.steelDark, O: C.ink }
-  SHURIKEN_9.forEach((row, y) => {
-    for (let x = 0; x < 9; x++) {
-      const c = col[row[x]!]
-      if (c) px(ctx, ox + x * k, oy + y * k, k, k, c)
-    }
-  })
-}
 const bowProc: ProceduralDraw = (ctx) => {
   px(ctx, 18, 8, 2, 16, C.wood) // right-bulging limb
   px(ctx, 16, 6, 2, 4, C.wood)
@@ -189,7 +165,6 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'weapon:sword': { kind: 'image', src: '/sprites/weapons/sword.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:hammer': { kind: 'image', src: '/sprites/weapons/hammer.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:spear': { kind: 'image', src: '/sprites/weapons/spear.png', width: SIZE_SPEAR_W, height: SIZE_SPEAR_H },
-  'weapon:shuriken': { kind: 'image', src: '/sprites/weapons/shuriken.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:bow': { kind: 'image', src: '/sprites/weapons/bow.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:scythe': { kind: 'image', src: '/sprites/weapons/scythe.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
 
@@ -205,7 +180,6 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'icon:weapon:sword': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
   'icon:weapon:hammer': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
   'icon:weapon:spear': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
-  'icon:weapon:shuriken': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: shurikenProc },
   'icon:weapon:bow': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
   'icon:weapon:scythe': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
 
@@ -221,7 +195,6 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   // renderer can prefer them if an image fails to load.
   'weapon:sword:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: swordProc },
   'weapon:hammer:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hammerProc },
-  'weapon:shuriken:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: shurikenProc },
   'weapon:spear:proc': { kind: 'procedural', width: SIZE_SPEAR_W, height: SIZE_SPEAR_H, draw: spearProc },
   'weapon:bow:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: bowProc },
 }

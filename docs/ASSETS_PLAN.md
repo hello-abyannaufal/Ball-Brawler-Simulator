@@ -116,7 +116,7 @@ public/sprites/
   fx/        hit-contact.png hit-weapon.png hit-projectile.png
   icons/
     skills/  vampire.png spike.png blaster.png splitter.png grower.png
-    weapons/ sword.png hammer.png spear.png shuriken.png bow.png  (shuriken.png = the former orbiting-blade.png)
+    weapons/ sword.png hammer.png spear.png bow.png
     status/  poison.png slow.png stun.png  (manifest id `status:<status id>`)
     nav/     home.png versus.png roulette.png library.png recordings.png settings.png
   ui/        button.png panel.png hpbar-frame.png hpbar-fill.png checkbox.png toggle.png winner-banner.png
@@ -164,9 +164,6 @@ Global Rules in mind for all of them.
 3. **spear.png** — "16-bit pixel-art spear, horizontal, tip pointing right, very
    long thin wooden shaft with a small steel tip, fills a 48×12 transparent
    canvas, butt on the left (pivot (6, 6)), hard edges, limited palette."
-4. **orbiting-blade.png** — "16-bit pixel-art small curved blade / shuriken,
-   compact (~12px), designed to spin, centered on 32×32 transparent (pivot (16, 16)), hard
-   edges, limited palette."
 5. **bow.png** — "16-bit pixel-art short bow, side view, limbs bulge toward the
    right (+x, toward the target), taut string on the left (archer side),
    wooden limbs with a grip at the pivot (19, 16), ~16px tall on 32×32

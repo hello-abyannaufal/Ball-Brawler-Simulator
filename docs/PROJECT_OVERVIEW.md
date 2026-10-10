@@ -80,8 +80,8 @@ diresolusi engine lewat `ballStats()` seperti weapon). Bola lama tanpa race mema
 | Orc | 115 | 36 | ×0.85 | ×1.00 | ×0.85 |
 
 - `speed` mengalikan kecepatan awal & `cruiseSpeed`; `damageTaken` mengalikan setiap damage
-  yang masuk (di `applyDamage`); `weaponSpin` mengalikan putaran semua weapon (termasuk ring
-  Shuriken dan sapuan bidik Bow, tapi bukan interval summon/tembak).
+  yang masuk (di `applyDamage`); `weaponSpin` mengalikan putaran semua weapon (termasuk sapuan
+  bidik Bow, tapi bukan interval tembak).
 - Tier 2 (Dwarf, Goblin, Giant) menyusul setelah Tier 1 stabil.
 
 | Atribut lain | Nilai |
@@ -107,13 +107,11 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 | **Hammer** | 42 | 10 | 2.4 | 30 | 1100 | circle r16 (kepala) |
 | **Spear** | 72 | 6 | 3.0 | 8 | 600 | segment 72 × 8 |
 | **Bow** | 24 | 0 (lewat panah) | 2.8 | 5 | 400 | segment 24 × 8 |
-| **Shuriken** | 1 (tanpa bilah) | 0 (lewat shuriken) | 3.0 | 6 | 0 | circle r0.5 (dummy) |
 | **Scythe** | 46 | 6 | 3.6 | 15 | 800 | circle r14 (bilah) |
 
 ### 3.2 Skill unik per weapon
 
-- **Sword — Riposte** (`riposte`): setiap clash di mana sword *tidak* ter-disarm, atau saat
-  memecahkan shuriken lawan yang sedang mengorbit, riposte siap selama **60 step (1 s)**:
+- **Sword — Riposte** (`riposte`): setiap clash di mana sword *tidak* ter-disarm, riposte siap selama **60 step (1 s)**:
   hit berikutnya **×2**, bilah berputar **2.5×** lebih cepat menghadap lawan, dan proyektil
   lawan yang disentuh **dipantulkan** balik ke penembaknya.
 - **Hammer — Heavy blow** : `cannotBeParried`; hit melempar bola lawan dengan
@@ -125,11 +123,6 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 - **Bow — Projectile**: menembak panah (speed 320, radius 4, damage 7) tiap 100 step,
   hanya jika mengarah ±5° ke lawan; arah dibidik dengan *lead* ke posisi lawan berikutnya.
   `projectileBlockable`: panah bisa ditepis weapon melee lawan.
-- **Shuriken — Summoner** (`summon`): tiap 72 step (1.2 s) menambah 1 shuriken yang mengorbit
-  (radius 12, jarak 18 dari permukaan bola, slot tetap 72°), maks **5**. Shuriken orbit:
-  3 damage lalu pecah saat menyentuh bola lawan; pecah bila disentuh weapon lawan; menahan
-  proyektil lawan. Saat 5 terkumpul → dilempar kipas 45° ke lawan (speed 300, 4 damage tiap
-  shuriken, sekali hit), memantul di dinding selama 120 step (2 s).
 - **Scythe — Reap** (`reap`): hit memulai reap selama **60 step (1 s)**: bilah berputar **10×**
   lebih cepat dan bisa mengenai bola yang sama lagi tiap **4 step**. Hit scythe tidak memberi
   knockback (bilah terus memotong). Setelah reap selesai, lawan aman selama hit cooldown normal
@@ -153,6 +146,7 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 Win rate (engine 1.1.0, 20 seed × kedua slot, batas 90 s): Sword 62%, Hammer 68%, Spear 44%,
 Shuriken 33%, Bow 43%. **Matchup individual masih timpang** (mis. Hammer 75% vs Sword,
 Sword 78% vs Spear/Shuriken, Spear 83% vs Shuriken).
+(Angka historis; Shuriken sudah dihapus di engine 1.4.0.)
 Perubahan kecil bisa membalik seluruh matchup — ukur ulang setelah tiap perubahan stat.
 
 ### 3.5 Menambah weapon
@@ -164,7 +158,7 @@ Perubahan kecil bisa membalik seluruh matchup — ukur ulang setelah tiap peruba
 4. Otomatis muncul di roda Roulette. Bump `engineVersion`.
 
 Field opsional yang tersedia: `projectile`, `cannotBeParried`, `launchSpeed`, `reboundOnHit`,
-`wallSlam`, `riposte`, `reap`, `tipStrike`, `summon`, `projectileBlockable` (lihat `engine/weapons/types.ts`).
+`wallSlam`, `riposte`, `reap`, `tipStrike`, `projectileBlockable` (lihat `engine/weapons/types.ts`).
 
 ---
 
@@ -175,7 +169,7 @@ Field opsional yang tersedia: `projectile`, `cannotBeParried`, `launchSpeed`, `r
 | Prioritas | Item | Catatan |
 |---|---|---|
 | Tinggi | **Balance pass lanjutan** | Fokus ke matchup yang timpang & tidak tergantung seed, bukan hanya win rate rata-rata. |
-| Tinggi | **Balance race Tier 1**, lalu Tier 2 & tampilan race | Orc sedikit kuat, Elf lemah; sangat tergantung weapon (Shuriken, Bow). |
+| Tinggi | **Balance race Tier 1**, lalu Tier 2 & tampilan race | Orc sedikit kuat, Elf lemah; sangat tergantung weapon (mis. Bow). |
 | Tinggi | **Trait & Ability** (pengganti sistem Skill lama) | Lihat 4.2. |
 | Sedang | **UI Login / Register / Logout** | API `/api/auth/*` sudah ada; butuh PostgreSQL jalan. |
 | Sedang | **Home page** | Intro singkat + link ke Roulette & Versus. |

@@ -104,8 +104,8 @@ let recStart = 0
 
 watch(soundEnabled, (v) => audio.setEnabled(v))
 
-// Weapon sprites carry transparent padding (the shuriken is ~14px in a 32px
-// canvas), so icons are cropped to their visible pixels and then scaled to fit.
+// Weapon sprites carry transparent padding, so icons are cropped to their
+// visible pixels and then scaled to fit.
 const croppedIcons = ref<Record<string, string>>({})
 
 function cropToContent(src: string): void {
