@@ -138,6 +138,8 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
   - selain itu `disarm` dengan peluang = porsi bobot yang lebih berat, **dibatasi 60%**
     (`MAX_DISARM_CHANCE`), sisanya `bounce`.
   - Disarm = weapon yang kalah stun **18 step** (tidak bisa memberi damage).
+  - Visual (renderer saja): parry memunculkan shockwave **putih** kecil di titik benturan
+    (wall slam Hammer memakai shockwave abu-abu yang lebih besar).
 - Hit weapon memberi knockback dasar 50 (Hammer memakai `launchSpeed`); clash knockback 120.
 - **Hit cooldown** per pasangan attacker–target, agar satu ayunan tidak kena tiap frame.
 

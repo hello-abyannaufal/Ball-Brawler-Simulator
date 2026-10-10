@@ -72,12 +72,13 @@ const HIT_STOP = 0.08
 /** Heavy weapons (those with a wall slam, e.g. Hammer) freeze longer on contact. */
 const HEAVY_HIT_STOP = 0.2
 
-/** Wall-slam shockwave: a gray ring from the wall contact that widens while its
- *  border thins out to nothing. Render-only, clipped to the arena. */
+/** Shockwave: a ring that widens while its border thins out to nothing.
+ *  Render-only, clipped to the arena. Gray from a wall slam's contact point,
+ *  smaller and white from a parry (an even clash). */
 const SHOCKWAVE_LIFE = 0.45 // seconds
-const SHOCKWAVE_RADIUS = 56 // arena px at the end
 const SHOCKWAVE_WIDTH = 5 // border px at the start
-const SHOCKWAVE_COLOR = '#8b9bb4'
+const SLAM_SHOCKWAVE = { radius: 56, color: '#8b9bb4' } // radius: arena px at the end
+const PARRY_SHOCKWAVE = { radius: 40, color: '#ffffff' }
 
 /** Blood burst on damage: chunky square pixels, render-only (Math.random is
  *  fine here, it never feeds back into the engine). */
@@ -131,6 +132,8 @@ interface Shockwave {
   x: number
   y: number
   life: number // seconds remaining
+  radius: number // arena px at the end
+  color: string
 }
 
 interface HitFlash {
@@ -197,7 +200,7 @@ export function useVersusDuel(
         view.lastEvent.value = e
         if (e.type === 'wallSlam') {
           pendingSlam = { ballId: e.ballId, x: e.x, y: e.y }
-          if (!reduced) shockwaves.push({ x: e.x, y: e.y, life: SHOCKWAVE_LIFE })
+          if (!reduced) shockwaves.push({ x: e.x, y: e.y, life: SHOCKWAVE_LIFE, ...SLAM_SHOCKWAVE })
           return
         }
         if (e.type === 'damage' && e.amount > 0) {
@@ -223,7 +226,10 @@ export function useVersusDuel(
         } else if (e.type === 'weaponClash') {
           if (reduced) return
           hitStop = Math.max(hitStop, CLASH_HIT_STOP)
-          spawnSparks(e.a, e.b, e.outcome)
+          const at = clashPoint(e.a, e.b)
+          if (!at) return
+          spawnSparksAt(at.x, at.y, SPARK_COUNT[e.outcome])
+          if (e.outcome === 'parry') shockwaves.push({ ...at, life: SHOCKWAVE_LIFE, ...PARRY_SHOCKWAVE })
         }
       },
     })
@@ -327,15 +333,16 @@ export function useVersusDuel(
   }
 
   /** Radial burst of sparks + a white flash where the two weapons meet. */
-  function spawnSparks(aId: EntityId, bId: EntityId, outcome: keyof typeof SPARK_COUNT): void {
+  /** Where two clashing weapons touch: the midpoint of each blade's point
+   *  closest to the other. Undefined if either is gone. */
+  function clashPoint(aId: EntityId, bId: EntityId): { x: number; y: number } | undefined {
     const ents = engine?.world.entities
     const a = ents?.find((e): e is WeaponEntity => e.id === aId && e.kind === 'weapon')
     const b = ents?.find((e): e is WeaponEntity => e.id === bId && e.kind === 'weapon')
-    if (!a || !b) return
-    // Contact ≈ midpoint of each blade's point closest to the other.
+    if (!a || !b) return undefined
     const pa = closestOnWeapon(a, b.position.x, b.position.y)
     const pb = closestOnWeapon(b, pa.x, pa.y)
-    spawnSparksAt((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, SPARK_COUNT[outcome])
+    return { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 }
   }
 
   /** Radial spark burst + white flash at a point (clashes, swatted arrows). */
@@ -390,10 +397,10 @@ export function useVersusDuel(
     ctx.beginPath()
     ctx.rect(0, 0, width, height)
     ctx.clip()
-    ctx.fillStyle = SHOCKWAVE_COLOR
     for (const w of shockwaves) {
+      ctx.fillStyle = w.color
       const t = 1 - w.life / SHOCKWAVE_LIFE // 0 → 1
-      const outer = 4 + (SHOCKWAVE_RADIUS - 4) * Math.sqrt(t) // fast start, eases out
+      const outer = 4 + (w.radius - 4) * Math.sqrt(t) // fast start, eases out
       const thick = SHOCKWAVE_WIDTH * (1 - t)
       if (thick < 0.5) continue
       const inner = outer - thick
