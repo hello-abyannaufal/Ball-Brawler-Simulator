@@ -1,5 +1,6 @@
 import type { WeaponDefinition } from './types'
 import { weaponRegistry } from './registry'
+import { riposte } from './behaviors/riposte'
 
 /** Sword: the orbiting baseline weapon (Req 10.11). */
 export const sword: WeaponDefinition = {
@@ -13,7 +14,7 @@ export const sword: WeaponDefinition = {
   hitCooldown: 500,
   // Any clash it isn't disarmed in → for 1 s: next hit ×2, blade spins 2.5×
   // toward the opponent, and projectiles it touches are reflected at the shooter.
-  riposte: { multiplier: 2, windowSteps: 60, spinBoost: 2.5, reflectProjectiles: true },
+  behaviors: [riposte({ multiplier: 2, windowSteps: 60, spinBoost: 2.5, reflectProjectiles: true })],
   hitbox: { shape: 'segment', length: 48, thickness: 10 },
   spriteId: 'weapon:sword',
   iconId: 'icon:weapon:sword',

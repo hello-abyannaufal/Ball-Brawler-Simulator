@@ -1,5 +1,6 @@
 import type { WeaponDefinition } from './types'
 import { weaponRegistry } from './registry'
+import { shooter } from './behaviors/shooter'
 
 /** Bow: held weapon with projectile settings present (Req 10.11). */
 export const bow: WeaponDefinition = {
@@ -11,15 +12,15 @@ export const bow: WeaponDefinition = {
   angularSpeed: 2.8,
   weight: 5,
   hitCooldown: 400,
-  projectileBlockable: true, // arrows can be swatted by melee weapons
   hitbox: { shape: 'segment', length: 24, thickness: 8 },
-  projectile: {
+  behaviors: [shooter({
     speed: 320,
     radius: 4, // circle at the arrow tip
     damage: 7,
     fireInterval: 100,
     facingDegrees: 5, // narrow cone: fires less often
-  },
+    blockable: true, // arrows can be swatted by melee weapons
+  })],
   spriteId: 'weapon:bow',
   iconId: 'icon:weapon:bow',
   pivot: { x: 19, y: 16 },

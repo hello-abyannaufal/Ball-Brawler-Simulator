@@ -3,6 +3,7 @@ import './weapons/index'
 import { createEngine, engineVersion, TIMESTEP } from './engine'
 import type { DuelConfig } from './config'
 import type { WeaponEntity } from './entities'
+import type { reap as reapBehavior } from './weapons/behaviors/reap'
 
 const ARENA = { width: 360, height: 360 }
 
@@ -33,16 +34,17 @@ describe('Scythe reap', () => {
         })
         const scythe = engine.world.entities.find((x): x is WeaponEntity => x.kind === 'weapon' && x.def.id === 'scythe')!
         const scytheOwner = scythe.ownerId
-        const reap = scythe.def.reap!
+        const reap = (scythe.def.behaviors![0] as ReturnType<typeof reapBehavior>).config
+        const reapSteps = () => (scythe.behaviorState[0] as { steps: number }).steps
         const full = Math.round(scythe.def.hitCooldown / 1000 / TIMESTEP)
         let hitsThisReap = 0
         let reapEndedAt = -Infinity
         for (let i = 0; i < 3600 && !engine.ended; i++) {
           hit = false
-          const before = scythe.reapSteps
+          const before = reapSteps()
           engine.step()
           if (!hit) {
-            if (before > 0 && scythe.reapSteps === 0) {
+            if (before > 0 && reapSteps() === 0) {
               if (hitsThisReap >= 2) multiHitReaps++
               reapEndedAt = engine.world.tick
             }
@@ -51,7 +53,7 @@ describe('Scythe reap', () => {
           if (before === 0) {
             // A fresh reap: never right after the last one ended.
             expect(engine.world.tick - reapEndedAt).toBeGreaterThanOrEqual(full)
-            expect(scythe.reapSteps).toBe(reap.windowSteps)
+            expect(reapSteps()).toBe(reap.windowSteps)
             hitsThisReap = 1
           } else {
             hitsThisReap++

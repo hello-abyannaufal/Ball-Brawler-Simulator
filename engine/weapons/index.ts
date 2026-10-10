@@ -11,5 +11,6 @@ export type {
   WeaponInstance,
   WeaponMode,
   Hitbox,
-  ProjectileSettings,
 } from './types'
+export type { WeaponBehavior, BehaviorContext, HitResponse } from './behavior'
+export type { ProjectileSettings } from './behaviors/shooter'

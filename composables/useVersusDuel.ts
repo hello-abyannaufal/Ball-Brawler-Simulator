@@ -3,6 +3,7 @@ import type { DuelConfig } from '~/engine/config'
 import type { EngineEvent } from '~/engine/events'
 import type { Ball, Entity, EntityId, Projectile, WeaponEntity } from '~/engine/entities'
 import { createEngine, TIMESTEP, type Engine } from '~/engine/engine'
+import { activeBehaviorId, hasBehavior } from '~/engine/weapons/behavior'
 import { useSprites } from '~/composables/useSprites'
 import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
 import {
@@ -99,9 +100,12 @@ const CLASH_HIT_STOP = 0.05
 /** Riposte ready: a swing trail behind the blade, swept over its last few step
  *  poses. Colors go newest → oldest. */
 const RIPOSTE_TRAIL_STEPS = 6
-const RIPOSTE_TRAIL_COLORS = ['#ffffff', '#fee761', '#feae34', '#f77622']
-/** Scythe reap: the same swing trail in steel tones. */
-const REAP_TRAIL_COLORS = ['#ffffff', '#c0cbdc', '#8b9bb4', '#5a6988']
+/** Trail colors per weapon behavior whose burst is running: riposte in gold,
+ *  Scythe reap in steel tones. */
+const TRAIL_COLORS: Record<string, string[]> = {
+  'riposte': ['#ffffff', '#fee761', '#feae34', '#f77622'],
+  'reap': ['#ffffff', '#c0cbdc', '#8b9bb4', '#5a6988'],
+}
 const RIPOSTE_TRAIL_INNER = 0.35 // trail covers the blade from 35% of its length to the tip
 
 /** Per-source hit-flash (Req 16.5, 16.6): a 32×32 pixel sprite at the impact,
@@ -240,7 +244,7 @@ export function useVersusDuel(
   /** Does the attacker wield a heavy (wall-slamming) weapon? */
   function isHeavyAttacker(attackerId: EntityId | ''): boolean {
     return !!engine?.world.entities.some(
-      (w) => w.kind === 'weapon' && w.alive && w.ownerId === attackerId && !!w.def.wallSlam,
+      (w) => w.kind === 'weapon' && w.alive && w.ownerId === attackerId && hasBehavior(w, 'heavy-blow'),
     )
   }
 
@@ -458,7 +462,7 @@ export function useVersusDuel(
         angle: e.kind === 'weapon' ? e.angle : 0,
       })
       if (e.kind !== 'weapon') continue
-      if ((e.riposteSteps <= 0 && e.reapSteps <= 0) || !e.alive) {
+      if (!activeBehaviorId(e) || !e.alive) {
         trails.delete(e.id)
         continue
       }
@@ -584,8 +588,9 @@ export function useVersusDuel(
     // Scale so the drawn grip→tip span equals the engine's weapon length:
     // what you see is exactly the hitbox.
     const scale = w.def.spriteReach ? w.def.length / w.def.spriteReach : 2
-    if (w.riposteSteps > 0) drawRiposteTrail(ctx, w, anchor, RIPOSTE_TRAIL_COLORS)
-    else if (w.reapSteps > 0) drawRiposteTrail(ctx, w, anchor, REAP_TRAIL_COLORS)
+    const burst = activeBehaviorId(w)
+    const trail = burst && TRAIL_COLORS[burst]
+    if (trail) drawRiposteTrail(ctx, w, anchor, trail)
     drawSprite(ctx, spriteId, anchor.x, anchor.y, scale, w.angle, w.def.pivot)
   }
 

@@ -114,15 +114,15 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 - **Sword — Riposte** (`riposte`): setiap clash di mana sword *tidak* ter-disarm, riposte siap selama **60 step (1 s)**:
   hit berikutnya **×2**, bilah berputar **2.5×** lebih cepat menghadap lawan, dan proyektil
   lawan yang disentuh **dipantulkan** balik ke penembaknya.
-- **Hammer — Heavy blow** : terberat (30), jadi tidak pernah di-parry weapon lain; hit melempar bola lawan dengan
+- **Hammer — Heavy blow** (`heavyBlow`): terberat (30), jadi tidak pernah di-parry weapon lain; hit melempar bola lawan dengan
   `launchSpeed: 540`; `reboundOnHit` (spin berbalik setelah kena); **Wall slam**: jika bola
   yang terkena menabrak dinding dalam 45 step (0.75 s) → +6 damage.
   Visual (renderer saja): hit-stop lebih lama saat kontak (0.2 s), dan wall slam memunculkan
   shockwave abu-abu dari titik kontak dinding yang melebar sambil menipis sampai hilang.
 - **Spear — Tip strike** (`tipStrike`): hit di **20% ujung** tombak → damage **×2**.
-- **Bow — Projectile**: menembak panah (speed 320, radius 4, damage 7) tiap 100 step,
+- **Bow — Shooter** (`shooter`): menembak panah (speed 320, radius 4, damage 7) tiap 100 step,
   hanya jika mengarah ±5° ke lawan; arah dibidik dengan *lead* ke posisi lawan berikutnya.
-  `projectileBlockable`: panah bisa ditepis weapon melee lawan.
+  `blockable`: panah bisa ditepis weapon melee lawan.
 - **Scythe — Reap** (`reap`): hit memulai reap selama **60 step (1 s)**: bilah berputar **10×**
   lebih cepat dan bisa mengenai bola yang sama lagi tiap **4 step**. Hit scythe tidak memberi
   knockback (bilah terus memotong). Setelah reap selesai, lawan aman selama hit cooldown normal
@@ -159,8 +159,14 @@ Perubahan kecil bisa membalik seluruh matchup — ukur ulang setelah tiap peruba
    atur `spriteId`, `pivot`, `spriteReach` agar cocok dengan hitbox (cek *Show hitboxes*).
 4. Otomatis muncul di roda Roulette. Bump `engineVersion`.
 
-Field opsional yang tersedia: `projectile`, `launchSpeed`, `reboundOnHit`,
-`wallSlam`, `riposte`, `reap`, `tipStrike`, `projectileBlockable` (lihat `engine/weapons/types.ts`).
+Mekanik khusus dipasang lewat `behaviors` (komposisi), dipilih dari `engine/weapons/behaviors/`:
+`riposte`, `reap`, `tipStrike`, `heavyBlow`, `shooter`. Mekanik baru = file behavior baru yang
+mengimplementasikan hook di `engine/weapons/behavior.ts` (`spinMultiplier`, `onStep`, `onClash`,
+`hitMultiplier`, `afterHit`, `projectileResponse`); engine tidak perlu diubah.
+
+**Aturan:** behavior hanya menyentuh weapon & state-nya sendiri. Interaksi antar weapon hanya
+lewat konsep generik engine (menang/kalah clash, projectile yang menyentuh weapon), tidak pernah
+dengan mengecek definisi weapon lain.
 
 ---
 

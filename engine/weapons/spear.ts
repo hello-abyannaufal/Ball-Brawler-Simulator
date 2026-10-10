@@ -1,5 +1,6 @@
 import type { WeaponDefinition } from './types'
 import { weaponRegistry } from './registry'
+import { tipStrike } from './behaviors/tipStrike'
 
 /** Spear: held, greatest length among starters (Req 10.11). */
 export const spear: WeaponDefinition = {
@@ -11,7 +12,7 @@ export const spear: WeaponDefinition = {
   angularSpeed: 3.0,
   weight: 8,
   hitCooldown: 600,
-  tipStrike: { fraction: 0.2, multiplier: 2 }, // outer 20% of the spear ×2
+  behaviors: [tipStrike({ fraction: 0.2, multiplier: 2 })], // outer 20% of the spear ×2
   hitbox: { shape: 'segment', length: 72, thickness: 8 },
   spriteId: 'weapon:spear',
   iconId: 'icon:weapon:spear',

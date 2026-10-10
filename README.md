@@ -113,7 +113,8 @@ stores/ (Pinia, persisted to localStorage)       server/ (Nitro API)  ─► Pos
 
 ### Add a Weapon
 
-1. Create `engine/weapons/<id>.ts` exporting a `WeaponDefinition` (`id`, `name`, `mode: 'orbit'`, `length`, `damage`, `angularSpeed`, `weight`, `hitCooldown`, `hitbox`; optional `projectile`, `launchSpeed`, `reboundOnHit`, `wallSlam`, `riposte`, `tipStrike`, `projectileBlockable`) and call `weaponRegistry.register(def)`.
+1. Create `engine/weapons/<id>.ts` exporting a `WeaponDefinition` (`id`, `name`, `mode: 'orbit'`, `length`, `damage`, `angularSpeed`, `weight`, `hitCooldown`, `hitbox`) and call `weaponRegistry.register(def)`. Special mechanics go in `behaviors`, picked from `engine/weapons/behaviors/` (`riposte`, `reap`, `tipStrike`, `heavyBlow`, `shooter`), e.g. `behaviors: [riposte({ multiplier: 2, windowSteps: 60 })]`.
+   - A new mechanic is a new behavior file implementing the hooks in `engine/weapons/behavior.ts`; the engine itself doesn't change. A behavior only touches its own weapon: other weapons reach it through generic engine concepts (clash won/lost, a projectile touching it), never by their definitions.
 2. Import it in `engine/weapons/index.ts`.
 3. Add its sprite to `public/sprites/weapons/<id>.png` and an entry in `assets/sprites/manifest.ts`; set `spriteId`, `pivot`, and `spriteReach` (sprite pixels from pivot to tip) so the drawn weapon matches its hitbox (check with *Show hitboxes* on `/versus`).
 4. It appears automatically on the roulette Weapon wheel.
