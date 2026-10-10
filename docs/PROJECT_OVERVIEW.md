@@ -123,7 +123,8 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 - **Spear — Tip strike** (`tipStrike`): hit di **20% ujung** tombak → damage **×2**.
 - **Bow — Shooter** (`shooter`): menembak panah (speed 320, radius 4, damage 7) tiap 100 step,
   hanya jika mengarah ±5° ke lawan; arah dibidik dengan *lead* ke posisi lawan berikutnya.
-  `blockable`: panah bisa ditepis weapon melee lawan.
+  `blockable`: panah bisa ditepis weapon melee lawan. `blocksProjectiles`: badan bow dari
+  **metal**, jadi menahan panah & peluru lawan (Revolver tidak, proyektil menembusnya).
 - **Scythe — Reap** (`reap`): hit memulai reap selama **60 step (1 s)**: bilah berputar **10×**
   lebih cepat dan bisa mengenai bola yang sama lagi tiap **4 step**. Hit scythe tidak memberi
   knockback (bilah terus memotong). Setelah reap selesai, lawan aman selama hit cooldown normal

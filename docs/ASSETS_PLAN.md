@@ -143,8 +143,9 @@ All weapons orbit their ball. Sizes are arena units; the sprite is scaled by
    left (pivot (5, 16)), heavy and chunky.
 3. **spear.png** — very long thin wooden shaft with a small steel tip, butt on
    the left (pivot (6, 6)).
-4. **bow.png** — short bow, limbs bulge toward the right (+x, toward the
-   target), taut string on the left, grip at the pivot (19, 16).
+4. **bow.png** — short steel bow (metal, so it blocks bullets), limbs bulge
+   toward the right (+x, toward the target) with a white glint on the upper
+   limb, taut string on the left, gold grip at the pivot (19, 16).
 5. **scythe.png** — long wooden shaft with a purple grip wrap, a crescent steel
    blade at the tip curling up and back, bright edge on the inner curve
    (pivot (5, 12)).

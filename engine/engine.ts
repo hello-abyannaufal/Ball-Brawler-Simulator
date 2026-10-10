@@ -425,7 +425,7 @@ export function createEngine(opts: EngineOptions): Engine {
     for (const p of projectiles) {
       if (!p.alive) continue
       // Swatted: an opposing weapon touching it destroys it, or reflects it
-      // (riposte); some let it pass (a Bow can't swat an arrow).
+      // (riposte); some let it pass (a Revolver can't swat a bullet).
       if (p.blockable) {
         // Swept over the last step, so fast shots can't slip through a blade.
         const x0 = p.position.x - p.velocity.x * TIMESTEP

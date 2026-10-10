@@ -18,6 +18,9 @@ export interface ProjectileSettings {
   /** While loaded and facing the target, the weapon stops spinning and keeps
    *  firing as long as the target stays within ±`holdDegrees`. */
   aimLock?: { holdDegrees: number }
+  /** The weapon body blocks opposing projectiles like a blade would (by
+   *  default projectiles pass straight through a shooter). */
+  blocksProjectiles?: boolean
 }
 
 interface ShooterState {
@@ -41,7 +44,8 @@ function angleDiff(a: number, b: number): number {
  * Shooter (Bow, Revolver): fires a projectile only while the weapon faces an
  * opponent AND the fire interval is ready (Req 10.10). Range does not matter.
  * Optionally runs dry and reloads (`magazine`) and holds its aim while firing
- * (`aimLock`). The weapon itself can't swat projectiles.
+ * (`aimLock`). The weapon itself can't swat projectiles unless
+ * `blocksProjectiles` is set.
  */
 export function shooter(config: ProjectileSettings): WeaponBehavior<ShooterState> {
   if (!(config.speed > 0)) invalid('projectile.speed', 'must be > 0')
@@ -103,6 +107,6 @@ export function shooter(config: ProjectileSettings): WeaponBehavior<ShooterState
         knockback: config.knockback ?? 0,
       })
     },
-    projectileResponse: () => 'pass',
+    ...(config.blocksProjectiles ? {} : { projectileResponse: () => 'pass' as const }),
   }
 }

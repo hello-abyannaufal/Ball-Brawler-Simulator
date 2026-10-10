@@ -78,9 +78,9 @@ const spearProc: ProceduralDraw = (ctx, w) => {
   px(ctx, w - 6, 4, 4, 4, C.steel) // tip
 }
 const bowProc: ProceduralDraw = (ctx) => {
-  px(ctx, 18, 8, 2, 16, C.wood) // right-bulging limb
-  px(ctx, 16, 6, 2, 4, C.wood)
-  px(ctx, 16, 22, 2, 4, C.wood)
+  px(ctx, 18, 8, 2, 16, C.steel) // right-bulging metal limb
+  px(ctx, 16, 6, 2, 4, C.steelDark)
+  px(ctx, 16, 22, 2, 4, C.steelDark)
   px(ctx, 14, 10, 1, 12, C.white) // string on the left
 }
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Ball, EntityId, Projectile } from './entities'
+import type { Ball, EntityId, Projectile, WeaponEntity } from './entities'
 import type { EngineEvent } from './events'
 import { createEngine, engineVersion } from './engine'
 import './weapons'
@@ -82,5 +82,49 @@ describe('projectile vs projectile', () => {
     expect(b!.hp).toBeLessThan(100)
     expect(b!.velocity.x).toBeGreaterThan(20)
     expect(Math.abs(b!.velocity.y)).toBeLessThan(1e-9)
+  })
+})
+
+describe('shooter weapon bodies', () => {
+  /** Ball b carries `weaponId`; a bullet from a crosses b's weapon midpoint during the next step. */
+  function bulletAcross(weaponId: string) {
+    const events: EngineEvent[] = []
+    const ball = (id: string, x: number, weapons: { weaponId: string }[]) => ({
+      id, radius: 20, maxHp: 100,
+      initialPosition: { x, y: 180 }, initialVelocity: { x: 0, y: 0 },
+      weapons,
+    })
+    const e = createEngine({
+      seed: 1,
+      config: {
+        engineVersion, seed: 1, arenaConfig: arena,
+        ballConfigs: [ball('a', 40, []), ball('b', 200, [{ weaponId }])],
+      },
+      onEvent: (ev) => events.push(ev),
+    })
+    e.step()
+    const [a] = e.world.entities.filter((x): x is Ball => x.kind === 'ball')
+    const w = e.world.entities.find((x): x is WeaponEntity => x.kind === 'weapon')!
+    const [nx, ny] = [-Math.sin(w.angle), Math.cos(w.angle)] // across the weapon
+    const p: Projectile = {
+      id: e.world.allocateId(), kind: 'projectile', alive: true,
+      position: { x: w.position.x - nx * 5, y: w.position.y - ny * 5 }, velocity: { x: nx * 600, y: ny * 600 },
+      radius: 3, damage: 2, ownerId: a!.id, blockable: true, weaponId: 'revolver', knockback: 0,
+    }
+    e.world.add(p)
+    e.step()
+    return { p, events }
+  }
+
+  it('the metal Bow blocks an opposing bullet', () => {
+    const { p, events } = bulletAcross('bow')
+    expect(p.alive).toBe(false)
+    expect(events).toContainEqual(expect.objectContaining({ type: 'projectileBlocked' }))
+  })
+
+  it('a Revolver lets an opposing bullet pass through', () => {
+    const { p, events } = bulletAcross('revolver')
+    expect(p.alive).toBe(true)
+    expect(events).not.toContainEqual(expect.objectContaining({ type: 'projectileBlocked' }))
   })
 })

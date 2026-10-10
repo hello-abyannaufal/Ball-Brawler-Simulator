@@ -2,7 +2,8 @@ import type { WeaponDefinition } from './types'
 import { weaponRegistry } from './registry'
 import { shooter } from './behaviors/shooter'
 
-/** Bow: held weapon with projectile settings present (Req 10.11). */
+/** Bow: held weapon with projectile settings present (Req 10.11). Its metal
+ *  body blocks opposing arrows and bullets. */
 export const bow: WeaponDefinition = {
   id: 'bow',
   name: 'Bow',
@@ -20,6 +21,7 @@ export const bow: WeaponDefinition = {
     fireInterval: 100,
     facingDegrees: 5, // narrow cone: fires less often
     blockable: true, // arrows can be swatted by melee weapons
+    blocksProjectiles: true, // metal body: opposing arrows and bullets stop on it
   })],
   spriteId: 'weapon:bow',
   pivot: { x: 19, y: 16 },
