@@ -21,6 +21,8 @@ export type EngineEvent =
   | { type: 'projectileReflected'; projectileId: EntityId; weaponId: EntityId; x: number; y: number }
   /** An arrow was swatted out of the air by a weapon at (x, y). */
   | { type: 'projectileBlocked'; projectileId: EntityId; weaponId: EntityId; x: number; y: number }
+  /** Two opposing projectiles met at (x, y) and destroyed each other. */
+  | { type: 'projectilesCollided'; a: EntityId; b: EntityId; x: number; y: number }
   /** A slammed ball hit a wall at (x, y); a `damage` event follows. */
   | { type: 'wallSlam'; ballId: EntityId; attackerId: EntityId; x: number; y: number }
   /** A status was added to a ball, or re-applied (refreshed / stacked). */

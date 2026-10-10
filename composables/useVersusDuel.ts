@@ -220,7 +220,7 @@ export function useVersusDuel(
           const heavy = !slam && e.source.tag === 'weapon' && isHeavyAttacker(e.attackerId)
           hitStop = heavy ? HEAVY_HIT_STOP : slam || crit ? HIT_STOP * 1.5 : HIT_STOP
           spawnBlood(e.targetId, e.attackerId, crit ? e.amount * 2 : e.amount, slam ?? undefined)
-        } else if (e.type === 'projectileBlocked') {
+        } else if (e.type === 'projectileBlocked' || e.type === 'projectilesCollided') {
           if (reduced) return
           spawnSparksAt(e.x, e.y, SPARK_COUNT.parry)
         } else if (e.type === 'projectileReflected') {

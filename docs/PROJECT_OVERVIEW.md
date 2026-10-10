@@ -140,6 +140,9 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
   - Disarm = weapon yang kalah stun **18 step** (tidak bisa memberi damage).
   - Visual (renderer saja): parry memunculkan shockwave **putih** kecil di titik benturan
     (wall slam Hammer memakai shockwave abu-abu yang lebih besar).
+- **Projectile vs projectile**: projectile milik lawan yang bertemu saling hancur (berlaku untuk
+  semua weapon ranged). Dicek *swept* sepanjang gerakan satu step, jadi tembakan cepat yang
+  berhadapan tidak bisa saling tembus.
 - Hit weapon memberi knockback dasar 50 (Hammer memakai `launchSpeed`); clash knockback 120.
 - **Hit cooldown** per pasangan attacker–target, agar satu ayunan tidak kena tiap frame.
 

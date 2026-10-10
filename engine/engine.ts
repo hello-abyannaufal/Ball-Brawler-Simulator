@@ -18,7 +18,7 @@ import {
   weaponTouchesCircle,
 } from './weapons/combat'
 
-export const engineVersion = '1.4.0' // non-empty string (Req 5.8)
+export const engineVersion = '1.5.0' // non-empty string (Req 5.8)
 export const TIMESTEP = 1 / 60 // seconds (Req 5.4)
 
 /** Knockback impulse magnitude applied on a weapon hit. */
@@ -439,6 +439,16 @@ export function createEngine(opts: EngineOptions): Engine {
           continue
         }
       }
+      // Opposing projectiles that meet cancel each other out (any ranged weapon).
+      const met = projectiles.find((q) => q.alive && q.ownerId !== p.ownerId && projectilesMet(p, q))
+      if (met) {
+        p.alive = false
+        met.alive = false
+        const x = (p.position.x + met.position.x) / 2
+        const y = (p.position.y + met.position.y) / 2
+        world.emit({ type: 'projectilesCollided', a: p.id, b: met.id, x, y })
+        continue
+      }
       for (const ball of world.aliveBalls()) {
         if (ball.id === p.ownerId) continue
         const dx = ball.position.x - p.position.x
@@ -456,6 +466,23 @@ export function createEngine(opts: EngineOptions): Engine {
         break
       }
     }
+  }
+
+  /**
+   * Did `p` and `q` touch during the last step? Swept over their relative
+   * motion, so fast head-on shots can't pass through each other between steps.
+   */
+  function projectilesMet(p: Projectile, q: Projectile): boolean {
+    const sum = p.radius + q.radius
+    const vx = (q.velocity.x - p.velocity.x) * TIMESTEP
+    const vy = (q.velocity.y - p.velocity.y) * TIMESTEP
+    const x0 = q.position.x - p.position.x - vx // relative position a step ago
+    const y0 = q.position.y - p.position.y - vy
+    const len2 = vx * vx + vy * vy
+    const t = len2 > 0 ? Math.min(1, Math.max(0, -(x0 * vx + y0 * vy) / len2)) : 1
+    const cx = x0 + vx * t
+    const cy = y0 + vy * t
+    return cx * cx + cy * cy <= sum * sum
   }
 
   /**

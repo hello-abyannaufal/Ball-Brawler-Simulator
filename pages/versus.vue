@@ -232,7 +232,7 @@ function startDuel(record = false): void {
     (e) => {
       if (!e) return
       if (e.type === 'damage') audio.play('hit')
-      else if (e.type === 'weaponClash' || e.type === 'projectileBlocked' || e.type === 'projectileReflected') audio.play('clash')
+      else if (e.type === 'weaponClash' || e.type === 'projectileBlocked' || e.type === 'projectilesCollided' || e.type === 'projectileReflected') audio.play('clash')
       else if (e.type === 'matchEnded') audio.play('win')
     },
   )
