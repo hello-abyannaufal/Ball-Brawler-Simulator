@@ -82,6 +82,7 @@ backgrounds). Do not introduce other hues.
 | Skill icon               | 16×16      | roulette + library slots                |
 | Weapon icon              | 16×16      | roulette + library slots (≠ arena art)  |
 | Nav / UI icon            | 16×16      | menu + toggles                          |
+| Status icon              | 8×8        | in-frame HUD, drawn at 2× (16 units)    |
 | Button (9-slice)         | 96×24 strip | 4 frames of 24×24 (9-slice margin 8px) |
 | Panel / window (9-slice) | 24×24      | 3×3 grid of 8×8 tiles (margin 8px)      |
 | HP bar frame             | 64×12      | empty frame                             |
@@ -116,6 +117,7 @@ public/sprites/
   icons/
     skills/  vampire.png spike.png blaster.png splitter.png grower.png
     weapons/ sword.png hammer.png spear.png shuriken.png bow.png  (shuriken.png = the former orbiting-blade.png)
+    status/  poison.png slow.png stun.png  (manifest id `status:<status id>`)
     nav/     home.png versus.png roulette.png library.png recordings.png settings.png
   ui/        button.png panel.png hpbar-frame.png hpbar-fill.png checkbox.png toggle.png winner-banner.png
   roulette/  reel-bg.png spin-button.png landing-glow.png
@@ -205,6 +207,15 @@ Global Rules in mind for all of them.
     16×16 transparent."
 15. **grower.png** — "16-bit pixel icon, a small circle with up-arrows showing
     growth, 16×16 transparent."
+
+### Status icons (8×8), transparent — HUD, drawn at 2×
+
+Shape-distinct, 1px ink outline, full 8×8 (too small for a margin). Generated in
+code (Pillow, EDG32); procedural copies live in `assets/sprites/manifest.ts`.
+
+- **poison.png** — green droplet (`#63c74d`/`#3e8948`), white highlight. DoT.
+- **slow.png** — blue hourglass (`#0099db`/`#124e89`), sand run down. Modifier.
+- **stun.png** — yellow four-point star (`#fee761`/`#feae34`/`#f77622`). Control.
 
 ### Weapon icons (16×16), transparent — simplified versions of the arena art
 

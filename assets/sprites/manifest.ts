@@ -157,11 +157,31 @@ function iconProc(color: string, badge: boolean): ProceduralDraw {
   }
 }
 
+// ---- Status icons (8×8, drawn at 2× in the HUD); same art as the PNGs ----
+const STATUS_COLORS: Record<string, string> = {
+  K: C.ink, W: C.white, G: C.green, g: '#3e8948', B: C.blue, b: '#124e89',
+  C: C.cyan, y: '#fee761', Y: C.gold, o: '#f77622',
+}
+function gridProc(rows: string[]): ProceduralDraw {
+  return (ctx) => {
+    rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) {
+        const c = STATUS_COLORS[row[x]!]
+        if (c) px(ctx, x, y, 1, 1, c)
+      }
+    })
+  }
+}
+const poisonProc = gridProc(['...KK...', '..KGGK..', '..KGGK..', '.KGWGGK.', 'KGWGGGgK', 'KGGGGggK', '.KggggK.', '..KKKK..'])
+const slowProc = gridProc(['KKKKKKKK', '.KbbbbK.', '..KBBK..', '...KK...', '...KK...', '..KbBK..', '.KBBBCK.', 'KKKKKKKK'])
+const stunProc = gridProc(['...KK...', '..KyYK..', '.KKyYKK.', 'KyyWYYoK', 'KYyYYooK', '.KKYoKK.', '..KYoK..', '...KK...'])
+
 const SIZE_ENTITY = 32
 const SIZE_SPEAR_W = 48
 const SIZE_SPEAR_H = 12
 const SIZE_PROJ = 8
 const SIZE_ICON = 16
+const SIZE_STATUS = 8
 
 /** The full sprite registry. */
 export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
@@ -188,6 +208,14 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'icon:weapon:shuriken': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: shurikenProc },
   'icon:weapon:bow': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
   'icon:weapon:scythe': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
+
+  // Status icons (HUD). Keyed by status id: `status:<id>`.
+  'status:poison': { kind: 'image', src: '/sprites/icons/status/poison.png', width: SIZE_STATUS, height: SIZE_STATUS },
+  'status:slow': { kind: 'image', src: '/sprites/icons/status/slow.png', width: SIZE_STATUS, height: SIZE_STATUS },
+  'status:stun': { kind: 'image', src: '/sprites/icons/status/stun.png', width: SIZE_STATUS, height: SIZE_STATUS },
+  'status:poison:proc': { kind: 'procedural', width: SIZE_STATUS, height: SIZE_STATUS, draw: poisonProc },
+  'status:slow:proc': { kind: 'procedural', width: SIZE_STATUS, height: SIZE_STATUS, draw: slowProc },
+  'status:stun:proc': { kind: 'procedural', width: SIZE_STATUS, height: SIZE_STATUS, draw: stunProc },
 
   // Weapon procedural fallbacks are also exposed under *:proc ids so the
   // renderer can prefer them if an image fails to load.

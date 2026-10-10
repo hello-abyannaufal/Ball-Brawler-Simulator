@@ -52,9 +52,15 @@ const EDG = {
 /** In-frame HUD (part of the recording), in arena units. Text uses the page's
  *  pixel font, which is crisp at multiples of 8. */
 const FONT = '"Press Start 2P", monospace'
-const HUD_H = 46
+const HUD_H = 56
 const HUD_GAP = 8 // between the HUD and the arena when it sits above it
 const HUD_VS_W = 28
+/** Status icons on the HUD's HP row: 8×8 art drawn at 2×. */
+const STATUS_ICON_SCALE = 2
+const STATUS_ICON_GAP = 4
+/** A status icon blinks over its last half second (sim steps, so a recording
+ *  blinks the same way as the live duel). */
+const STATUS_BLINK_STEPS = 30
 /** Below this HP fraction the HUD bar turns red. */
 const HP_LOW = 0.35
 
@@ -792,10 +798,25 @@ export function useVersusDuel(
       ctx.fillRect(right ? x + pad + 2 + (barW - 4 - fillW) : x + pad + 2, barY + 2, fillW, 4)
 
       const hpText = `${Math.max(0, Math.ceil(b.alive ? b.hp : 0))}/${b.maxHp}`
-      drawLabel(ctx, hpText, tx, y + 31, 8, EDG.fog, align)
+      drawLabel(ctx, hpText, tx, y + 34, 8, EDG.fog, align)
+      // Status icons on the HP row, packed toward the VS side (mirrored).
+      if (b.alive) drawStatusIcons(ctx, b, right ? x + pad : x + panelW - pad, y + 30, right)
     })
     drawLabel(ctx, 'VS', width / 2, y + HUD_H / 2 - 4, 8, EDG.hpLow, 'center', EDG.wall)
     ctx.restore()
+  }
+
+  /** A ball's status icons, running from `edgeX` away from it: leftward for
+   *  the left panel, rightward for the right one. Stacks show as a digit. */
+  function drawStatusIcons(ctx: CanvasRenderingContext2D, b: Ball, edgeX: number, top: number, rightward: boolean): void {
+    const size = 8 * STATUS_ICON_SCALE
+    b.statusEffects.forEach((s, i) => {
+      if (!reduced && s.remaining <= STATUS_BLINK_STEPS && Math.floor(s.remaining / 4) % 2 === 1) return
+      const offset = i * (size + STATUS_ICON_GAP)
+      const left = rightward ? edgeX + offset : edgeX - offset - size
+      drawSprite(ctx, `status:${s.defId}`, left + size / 2, top + size / 2, STATUS_ICON_SCALE)
+      if (s.stacks > 1) drawLabel(ctx, String(s.stacks), left + size + 3, top + size - 6, 8, EDG.text, 'right', EDG.wall)
+    })
   }
 
   /** Result card in the middle of the arena. */
