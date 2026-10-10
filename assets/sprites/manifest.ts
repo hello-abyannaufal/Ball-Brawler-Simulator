@@ -172,6 +172,24 @@ const poisonProc = gridProc(STATUS_COLORS, ['...KK...', '..KGGK..', '..KGGK..', 
 const slowProc = gridProc(STATUS_COLORS, ['KKKKKKKK', '.KbbbbK.', '..KBBK..', '...KK...', '...KK...', '..KbBK..', '.KBBBCK.', 'KKKKKKKK'])
 const stunProc = gridProc(STATUS_COLORS, ['...KK...', '..KyYK..', '.KKyYKK.', 'KyyWYYoK', 'KYyYYooK', '.KKYoKK.', '..KYoK..', '...KK...'])
 
+// ---- Race parts (ball pixels); same pixels as their PNGs ----
+// `S` / `s` are skin markers, recolored to the ball's fill (and its shade)
+// when the ball is baked: see RACE_SKIN in races.ts.
+const RACE_COLORS: Record<string, string> = {
+  K: C.ink, S: '#ff0044', s: '#f6757a', W: C.white, e: '#ead4aa', c: '#c28569',
+  L: C.steel, g: C.steelDark, Y: C.gold, T: '#e4a672', B: C.wood, b: C.woodDark,
+  o: '#f77622', O: '#be4a2f',
+}
+const RACE_PARTS: Record<string, string[]> = {
+  'human-hair': ['....K..K....', '...KBKKBK...', '..KBTBBTBKK.', '.KBTBBBBBBBK', 'KBBBBbBBBbBK', 'KbBbKbBKbKbK', '.KK..K..K.KK'],
+  'elf-ear': ['.....KK', '....KSK', '...KSSK', '..KSsSK', '.KSsSK.', 'KSsSK..', 'KSSK...', 'KKK....'],
+  'orc-tusks': ['K.........K', 'WK.......KW', 'eWK.....KWe', 'KeWK...KWeK', '.KceK.KecK.', '..KKK.KKK..'],
+  'dwarf-helm': ['K...........K', 'eK..KKKKK..Ke', 'ceKKLLLLgKKec', '.KcLLWLLggKK.', '..KLLLLLggK..', '.KYYYYYYYYoK.', '.KKKKKKKKKKK.'],
+  'dwarf-beard': ['KK.........KK', 'KoKKKKKKKKKoK', 'KooooooooooOK', 'KoooOooOoooOK', '.KooOooOooOK.', '.KOoooooooOK.', '..KOooOooOK..', '...KOOOOOK...', '....KKKKK....'],
+  'goblin-ear': ['.......KK', '....KKKSK', '..KKSSSSK', 'KKSSssSSK', 'KSSsssSK.', 'KSSssSSK.', 'KSSSSKK..', 'KSSKK....', 'KKK......'],
+  'giant-horn': ['...KKKKK...', '..KeeeeecK.', '.KeWWeeeecK', 'KeWeKKKKecK', 'KeeK...KccK', 'KeeK...KcK.', 'KeeK....K..', 'KceK.......', 'KccK.......', 'KccK.......'],
+}
+
 const SIZE_ENTITY = 32
 const SIZE_SPEAR_W = 48
 const SIZE_SPEAR_H = 12
@@ -212,6 +230,18 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'weapon:bow:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: bowProc },
   'weapon:scythe:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: scytheProc },
   'weapon:revolver:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: revolverProc },
+}
+
+for (const [id, rows] of Object.entries(RACE_PARTS)) {
+  const width = rows[0]!.length
+  const height = rows.length
+  SPRITE_MANIFEST[`race:${id}`] = { kind: 'image', src: `/sprites/races/${id}.png`, width, height }
+  SPRITE_MANIFEST[`race:${id}:proc`] = { kind: 'procedural', width, height, draw: gridProc(RACE_COLORS, rows) }
+}
+
+// Race icons (roulette wheel): the race's ball on a neutral fill, upright.
+for (const id of ['human', 'elf', 'orc', 'dwarf', 'goblin', 'giant']) {
+  SPRITE_MANIFEST[`race-icon:${id}`] = { kind: 'image', src: `/sprites/icons/races/${id}.png`, width: SIZE_ENTITY, height: SIZE_ENTITY }
 }
 
 /** Resolve a spriteId to its source, or the placeholder when unknown. */

@@ -87,12 +87,14 @@ that copy holds the exact same pixel map, so the art can be regenerated from it.
 | Blood burst, sparks, clash flash | particles | 🧩 Code | `useVersusDuel.ts`, render-only |
 | Shockwave (wall slam gray, parry white) | ring | 🧩 Code | `useVersusDuel.ts`, render-only |
 | Weapon trails (riposte gold, reap steel) | — | 🧩 Code | `useVersusDuel.ts`, per behavior id |
+| Race parts (human-hair, elf-ear, orc-tusks, dwarf-helm, dwarf-beard, goblin-ear, giant-horn) | 7×6 – 13×9, ball pixels | ✅ PNG | `public/sprites/races/`, id `race:<part>`, exact-copy `:proc` fallbacks; placed per race in `assets/sprites/races.ts` (anchor on the ball edge + pivot, back/front layer, mirrored pairs). `S`/`s` skin markers (`#ff0044` / `#f6757a`) are recolored to the ball's fill and shade, so the ball color stays free. Cosmetic only: no hitbox |
+| Race icons | 32×32 | ✅ PNG | `public/sprites/icons/races/`, id `race-icon:<race>`; the race's ball (16 cells) on a neutral steel fill; roulette wheel slices, drawn upright (`spriteUp`) |
 | Balls | radius-based | 🧩 Code | pixel ball baked per size + color (2-unit pixels, shade crescent); pattern/image fills ⏳ |
 | In-frame HUD (name, HP bar, VS, status row) | 56 units tall | 🧩 Code | `drawHud`; part of recordings |
 | Winner / draw card | — | 🧩 Code | `drawWinner` |
 | Arena floor and wall | 32-unit tiles | 🧩 Code | two-tone checker floor + 4px ink wall stroke (`clear`) |
 | Navigation icons | 8×8 | 🧩 Code | inline SVG paths in `NavigationMenu.vue` |
-| Roulette wheel | — | 🧩 Code | `RouletteWheel.vue`, slices carry weapon sprites |
+| Roulette wheel | — | 🧩 Code | `RouletteWheel.vue`, slices carry weapon sprites and race icons |
 | Trait / Ability icons | 16×16 | ⏳ Planned | after the Trait & Ability design is settled |
 | Ball fill patterns | 16×16 or 32×32 | ⏳ Planned | optional, see below |
 
@@ -105,7 +107,9 @@ UI panels and buttons are plain CSS (`.px-panel`, `.px-btn-*` in
 public/sprites/
   weapons/        sword.png hammer.png spear.png bow.png scythe.png   ✅
   projectiles/    arrow.png bullet.png                                ✅
+  races/         <part>.png (race feature parts)                     ✅
   icons/status/   poison.png slow.png stun.png                        ✅
+  icons/races/    <race>.png                                          ✅
                   freeze.png frozen.png                               ⏳
   icons/traits/   (Trait / Ability icons)                             ⏳
   patterns/       stripes.png checker.png dots.png                    ⏳ optional

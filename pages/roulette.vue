@@ -3,6 +3,7 @@ import { ref, computed } from 'vue'
 import { spinWheel, EmptyRegistryError, type WheelResult } from '~/engine/roulette'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { raceRegistry } from '~/engine/races/registry'
+import { RACE_LOOKS } from '~/assets/sprites/races'
 import { SEED_MAX } from '~/engine/rng'
 import { useLibraryStore } from '~/stores/library'
 import { useRouletteStore, MAX_WEIGHT, type WheelKind } from '~/stores/roulette'
@@ -23,6 +24,7 @@ interface WheelEntry {
   id: string
   name: string
   spriteId?: string
+  spriteUp?: boolean
 }
 
 /**
@@ -38,7 +40,9 @@ const STEPS: { kind: WheelKind; label: string; optional: boolean; entries: () =>
     label: 'Race',
     optional: true,
     entries: () =>
-      raceRegistry.ids().map((id) => ({ id, name: raceRegistry.get(id)?.name ?? id })),
+      raceRegistry.ids().map((id) => ({
+        id, name: raceRegistry.get(id)?.name ?? id, spriteId: RACE_LOOKS[id]?.iconId, spriteUp: true,
+      })),
   },
   {
     kind: 'weapon',
@@ -90,7 +94,7 @@ const entries = computed(() => {
 const slices = computed<WheelSlice[]>(() =>
   entries.value
     .filter((e) => e.weight > 0)
-    .map((e) => ({ id: e.id, weight: e.weight, color: e.color, spriteId: e.spriteId })),
+    .map((e) => ({ id: e.id, weight: e.weight, color: e.color, spriteId: e.spriteId, spriteUp: e.spriteUp })),
 )
 
 function entryName(stepIdx: number, id: string): string {

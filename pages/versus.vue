@@ -333,7 +333,7 @@ onBeforeUnmount(() => {
                 class="absolute -left-2.5 -top-2.5 bg-edg-gold px-1.5 py-1.5 font-pixel text-[10px] text-edg-ink shadow-[0_0_0_4px_#181425]"
               >{{ slotLabel(b.key) }}</span>
               <span class="relative block h-16 w-24" aria-hidden="true">
-                <PixelBall :fill="ballFill(b.config)" class="absolute left-1 top-1 size-14" />
+                <PixelBall :fill="ballFill(b.config)" :race-id="b.config.raceId" class="absolute left-1 top-1 size-14" />
                 <img
                   v-if="weaponIcon(b.config)"
                   :src="weaponIcon(b.config)!"
@@ -367,7 +367,7 @@ onBeforeUnmount(() => {
             :class="i === 1 ? 'order-3' : ''"
           >
             <span class="font-pixel text-[10px]" :class="i === 0 ? 'text-[#0099db]' : 'text-edg-red'">P{{ i + 1 }}</span>
-            <PixelBall v-if="slot" :fill="ballFill(slot.config)" class="size-16" />
+            <PixelBall v-if="slot" :fill="ballFill(slot.config)" :race-id="slot.config.raceId" class="size-16" />
             <span v-else class="flex size-16 items-center justify-center font-pixel text-xl text-edg-mist" aria-hidden="true">?</span>
             <span class="max-w-full truncate font-pixel text-[10px]">{{ slot?.name ?? '—' }}</span>
           </div>

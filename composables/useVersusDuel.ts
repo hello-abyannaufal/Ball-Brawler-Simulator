@@ -6,10 +6,9 @@ import { createEngine, TIMESTEP, type Engine } from '~/engine/engine'
 import { activeBehaviorId, landsHeavy, weaponLunge } from '~/engine/weapons/behavior'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { useSprites } from '~/composables/useSprites'
+import { BALL_PIXEL, useBallSprite } from '~/composables/useBallSprite'
 import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
-import {
-  BALL_DEFAULT_FILL, BALL_OUTLINE_COLOR, BALL_SHADE_STYLE, BALL_SHINE_STYLE,
-} from '~/utils/pixelBall'
+import { BALL_DEFAULT_FILL } from '~/utils/pixelBall'
 import '~/engine/weapons/index'
 
 export interface HpView {
@@ -64,10 +63,6 @@ const STATUS_ICON_GAP = 4
 const STATUS_BLINK_STEPS = 30
 /** Below this HP fraction the HUD bar turns red. */
 const HP_LOW = 0.35
-
-/** Ball pixel size in arena units. A bit chunkier than the weapon sprites
- *  (drawn at ~2×) so the 1-pixel outline stays readable while the ball moves. */
-const BALL_PIXEL = 3
 
 /** Hit-stop: real-time seconds the simulation freezes after a damage event.
  *  Render-only (the engine just isn't stepped), so determinism is unaffected. */
@@ -194,6 +189,7 @@ export function useVersusDuel(
 ): VersusDuel {
   const reduced = !!opts?.reducedMotion
   const { preloadAll, drawSprite } = useSprites()
+  const { ballSprite } = useBallSprite()
 
   const view: VersusView = {
     hp: shallowRef<HpView[]>([]),
@@ -207,7 +203,6 @@ export function useVersusDuel(
   let acc = 0
   let hitStop = 0 // seconds of freeze remaining
   let particles: Particle[] = []
-  const ballSprites = new Map<string, HTMLCanvasElement>()
   let flashes: Flash[] = []
   let hitFlashes: HitFlash[] = []
   let shockwaves: Shockwave[] = []
@@ -584,16 +579,17 @@ export function useVersusDuel(
     ctx.strokeRect(0, 0, width, height)
   }
 
-  /** The fighter picker's pixel-art ball (PixelBall.vue: outline, shade
-   *  crescent, shine), drawn at the weapon sprites' pixel size so ball and
-   *  weapon match. The outline sits inside the hitbox. */
+  /** The fighter picker's pixel-art ball with its race's parts, drawn at the
+   *  weapon sprites' pixel size so ball and weapon match. */
   function drawBall(ctx: CanvasRenderingContext2D, b: Ball): void {
-    const app = findAppearance(b.id)
+    const config = findConfig(b.id)
+    const app = config?.appearance
     const fill = app?.type === 'color' ? app.value : BALL_DEFAULT_FILL // pattern/image handled later
     const cells = Math.max(4, Math.round((b.radius * 2) / BALL_PIXEL))
-    const size = cells * BALL_PIXEL
+    const { canvas } = ballSprite(cells, fill, config?.raceId)
+    const size = canvas.width * BALL_PIXEL
     ctx.drawImage(
-      ballSprite(cells, fill),
+      canvas,
       Math.round(b.position.x - size / 2),
       Math.round(b.position.y - size / 2),
       size,
@@ -601,52 +597,11 @@ export function useVersusDuel(
     )
   }
 
-  /** One pixel-art ball `cells` wide, baked once per size and color. */
-  function ballSprite(cells: number, fill: string): HTMLCanvasElement {
-    const key = `${cells}|${fill}`
-    const cached = ballSprites.get(key)
-    if (cached) return cached
-    const c = document.createElement('canvas')
-    c.width = c.height = cells
-    const g = c.getContext('2d')!
-    const r = cells / 2
-    const shift = cells * 0.18 // shade crescent: what a circle moved up-left misses
-    for (let y = 0; y < cells; y++) {
-      for (let x = 0; x < cells; x++) {
-        const dx = x + 0.5 - r
-        const dy = y + 0.5 - r
-        const d = Math.hypot(dx, dy)
-        if (d > r) continue
-        if (d > r - 1) {
-          g.fillStyle = BALL_OUTLINE_COLOR
-          g.fillRect(x, y, 1, 1)
-          continue
-        }
-        g.globalAlpha = 1
-        g.fillStyle = fill
-        g.fillRect(x, y, 1, 1)
-        const angle = (Math.atan2(dy, dx) * 180) / Math.PI
-        if (Math.hypot(dx + shift, dy + shift) > r - 1.5) {
-          g.globalAlpha = BALL_SHADE_STYLE.opacity
-          g.fillStyle = BALL_SHADE_STYLE.color
-          g.fillRect(x, y, 1, 1)
-        } else if (d > r - 3 && d <= r - 2 && angle > -165 && angle < -105) {
-          g.globalAlpha = BALL_SHINE_STYLE.opacity
-          g.fillStyle = BALL_SHINE_STYLE.color
-          g.fillRect(x, y, 1, 1)
-        }
-        g.globalAlpha = 1
-      }
-    }
-    ballSprites.set(key, c)
-    return c
-  }
-
-  function findAppearance(id: EntityId) {
+  function findConfig(id: EntityId) {
     const idx = engine!.world.entities
       .filter((e) => e.kind === 'ball')
       .findIndex((e) => e.id === id)
-    return duel.ballConfigs[idx]?.appearance
+    return duel.ballConfigs[idx]
   }
 
   function drawWeapon(ctx: CanvasRenderingContext2D, w: WeaponEntity): void {
