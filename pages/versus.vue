@@ -220,25 +220,15 @@ function startDuel(record = false): void {
     showHitboxes: showHitboxes.value,
     reducedMotion: prefersReducedMotion,
     names: duelNames.value,
+    onSound: (s) => audio.play(s),
   })
   // Mirror the shallowRefs into local reactive refs for the template.
   const stopMirror = watchEffect(() => {
     hp.value = duel!.view.hp.value
     winner.value = duel!.view.winner.value
   })
-  // Play a synthesized sound per engine event (Req 14.5).
-  const stopSounds = watch(
-    () => duel!.view.lastEvent.value,
-    (e) => {
-      if (!e) return
-      if (e.type === 'damage') audio.play('hit')
-      else if (e.type === 'weaponClash' || e.type === 'projectileBlocked' || e.type === 'projectilesCollided' || e.type === 'projectileReflected') audio.play('clash')
-      else if (e.type === 'matchEnded') audio.play('win')
-    },
-  )
   stopDuelWatchers = () => {
     stopMirror()
-    stopSounds()
   }
   running.value = true
   duel.start()

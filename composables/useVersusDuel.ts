@@ -1,11 +1,11 @@
 import { shallowRef, type Ref, type ShallowRef } from 'vue'
 import type { DuelConfig } from '~/engine/config'
-import type { EngineEvent } from '~/engine/events'
 import type { Ball, Entity, EntityId, Projectile, WeaponEntity } from '~/engine/entities'
 import { createEngine, TIMESTEP, type Engine } from '~/engine/engine'
 import { activeBehaviorId, landsHeavy, weaponLunge } from '~/engine/weapons/behavior'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { useSprites } from '~/composables/useSprites'
+import type { SoundEvent } from '~/composables/useAudio'
 import { BALL_PIXEL, useBallSprite } from '~/composables/useBallSprite'
 import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
 import { BALL_DEFAULT_FILL } from '~/utils/pixelBall'
@@ -20,7 +20,6 @@ export interface HpView {
 export interface VersusView {
   hp: ShallowRef<HpView[]>
   winner: ShallowRef<EntityId | null | undefined>
-  lastEvent: ShallowRef<EngineEvent | null>
 }
 
 export interface VersusDuel {
@@ -132,6 +131,11 @@ const DROPPED_SPIN = 9 // rad/s
 /** The winner card waits for the death to play out. */
 const WINNER_CARD_DELAY = 1.3
 
+/** Shot sound per weapon id (default: arrow). */
+const SHOT_SOUNDS: Record<string, SoundEvent> = { revolver: 'shootBullet' }
+/** Status sounds, played when a status first lands (stacks 1). */
+const STATUS_SOUNDS: Record<string, SoundEvent> = { poison: 'poison', slow: 'slow', stun: 'stun' }
+
 /** Per-source hit-flash (Req 16.5, 16.6): a 32×32 pixel sprite at the impact,
  *  shaped differently per source (projectile = cross burst). Weapon hits have
  *  none: their blood burst is the feedback. */
@@ -200,12 +204,15 @@ export interface VersusOptions {
   reducedMotion?: boolean
   /** Display names, in `ballConfigs` order, for the on-canvas winner label. */
   names?: string[]
+  /** Called for every sound to play, as it happens (not batched per frame).
+   *  The death sounds follow the death animation; the jingle, the winner card. */
+  onSound?: (sound: SoundEvent) => void
 }
 
 /**
  * Client-only duel driver + retro renderer (Req 11.5, 11.6, 11.8, 11.10, 11.11).
  * Owns the rAF loop, advances the engine by whole 1/60s steps scaled by sim
- * speed, draws the World once per frame, and surfaces hp/winner/lastEvent via
+ * speed, draws the World once per frame, and surfaces hp/winner via
  * shallowRefs updated at most once per frame (never deep-binding entities).
  */
 export function useVersusDuel(
@@ -222,7 +229,6 @@ export function useVersusDuel(
   const view: VersusView = {
     hp: shallowRef<HpView[]>([]),
     winner: shallowRef<EntityId | null | undefined>(undefined),
-    lastEvent: shallowRef<EngineEvent | null>(null),
   }
 
   let engine: Engine | null = null
@@ -237,6 +243,9 @@ export function useVersusDuel(
   let deflected: Deflected[] = []
   let dying: Dying[] = []
   let endedFor = 0 // real seconds since the duel ended
+  let cardShown = false
+  let seenShots = new Set<EntityId>() // projectiles already heard firing
+  const sound = (s: SoundEvent) => opts?.onSound?.(s)
   const whiteSprites = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>()
   // Set by a `wallSlam` event; the damage event that follows uses its point.
   let pendingSlam: { ballId: EntityId; x: number; y: number } | null = null
@@ -250,9 +259,9 @@ export function useVersusDuel(
       seed,
       config: duel,
       onEvent: (e) => {
-        view.lastEvent.value = e
         if (e.type === 'wallSlam') {
           pendingSlam = { ballId: e.ballId, x: e.x, y: e.y }
+          sound('slam')
           if (!reduced) shockwaves.push({ x: e.x, y: e.y, life: SHOCKWAVE_LIFE, ...SLAM_SHOCKWAVE })
           return
         }
@@ -263,23 +272,31 @@ export function useVersusDuel(
           const at = slam ?? impactPoint(e.targetId, e.attackerId)
           const crit = e.style === 'critical'
           if (sprite && at) hitFlashes.push({ ...at, life: HIT_FLASH, spriteId: sprite, scale: crit ? 2 : 1 })
-          if (reduced) return // decorative motion off; flash above still shows
           // Heavy contact (Hammer, Spear thrust) freezes longest; slams and
           // criticals (riposte) land harder than a plain hit.
           const heavy = !slam && e.source.tag === 'weapon' && isHeavyHit(e.attackerId, e.targetId)
+          if (!slam) sound(hitSound(e.source.tag, heavy, crit)) // a slam was heard at the wall
+          if (reduced) return // decorative motion off; flash above still shows
           hitStop = heavy ? HEAVY_HIT_STOP : slam || crit ? HIT_STOP * 1.5 : HIT_STOP
           spawnBlood(e.targetId, e.attackerId, crit ? e.amount * 2 : e.amount, slam ?? undefined)
         } else if (e.type === 'ballDied') {
+          sound('death')
           if (!reduced) startDeath(e.ballId)
+        } else if (e.type === 'statusApplied') {
+          const s = STATUS_SOUNDS[e.statusId]
+          if (s && e.stacks === 1) sound(s)
         } else if (e.type === 'projectileBlocked' || e.type === 'projectilesCollided') {
+          sound('deflect')
           if (reduced) return
           spawnSparksAt(e.x, e.y, SPARK_COUNT.parry)
           if (e.type === 'projectileBlocked') spawnDeflected(e.projectileId, e.weaponId, e.x, e.y)
         } else if (e.type === 'projectileReflected') {
+          sound('reflect')
           if (reduced) return
           hitStop = Math.max(hitStop, CLASH_HIT_STOP)
           spawnSparksAt(e.x, e.y, SPARK_COUNT.disarm)
         } else if (e.type === 'weaponClash') {
+          sound(e.outcome)
           if (reduced) return
           hitStop = Math.max(hitStop, CLASH_HIT_STOP)
           const at = clashPoint(e.a, e.b)
@@ -291,6 +308,23 @@ export function useVersusDuel(
     })
     view.winner.value = undefined
     syncHp()
+  }
+
+  function hitSound(tag: string, heavy: boolean, crit: boolean): SoundEvent {
+    if (tag === 'dot') return 'hitDot'
+    if (tag === 'projectile' || tag === 'reflect') return 'hitProjectile'
+    return crit ? 'hitCrit' : heavy ? 'hitHeavy' : 'hit'
+  }
+
+  /** A shot sound for each projectile that appeared since the last check. */
+  function detectShots(): void {
+    const now = new Set<EntityId>()
+    for (const e of engine!.world.entities) {
+      if (e.kind !== 'projectile' || !e.alive) continue
+      now.add(e.id)
+      if (!seenShots.has(e.id)) sound(SHOT_SOUNDS[e.weaponId] ?? 'shootArrow')
+    }
+    seenShots = now
   }
 
   /** Does the attacker's weapon land this hit heavy (Hammer, Spear thrust)?
@@ -487,6 +521,7 @@ export function useVersusDuel(
   /** Every pixel of the ball becomes a chunk flying out from its center,
    *  faster at the rim, pushed away from the opponent. */
   function shatter(d: Dying): void {
+    sound('shatter')
     const { width: w, height: h } = d.sprite
     const data = d.sprite.getContext('2d')!.getImageData(0, 0, w, h).data
     const half = (w * BALL_PIXEL) / 2
@@ -891,7 +926,7 @@ export function useVersusDuel(
     drawHpBars(ctx)
     if (opts?.showHitboxes) drawHitboxes(ctx)
 
-    if (engine.ended && endedFor >= (reduced ? 0 : WINNER_CARD_DELAY)) drawWinner(ctx)
+    if (engine.ended && endedFor >= winnerCardDelay()) drawWinner(ctx)
     // Above the arena when the letterbox has room (9:16, 4:5), else over its top.
     const above = (el.height - ah * scale) / 2 / scale >= HUD_H + HUD_GAP
     drawHud(ctx, above ? -HUD_H - HUD_GAP : HUD_GAP)
@@ -1006,6 +1041,11 @@ export function useVersusDuel(
     ctx.restore()
   }
 
+  /** The card waits for the death animation, which reduced motion skips. */
+  function winnerCardDelay(): number {
+    return reduced ? 0 : WINNER_CARD_DELAY
+  }
+
   // --- loop ---
   function frame(now: number): void {
     if (!engine) return
@@ -1018,6 +1058,10 @@ export function useVersusDuel(
     const timeScale = dying.length > 0 ? DEATH_SLOWMO : 1
     updateDying(dt)
     if (engine.ended) endedFor += dt
+    if (engine.ended && !cardShown && endedFor >= winnerCardDelay()) {
+      cardShown = true
+      sound(engine.winner === null ? 'draw' : 'win')
+    }
     if (hitStop > 0) {
       // Frozen on a hit: burn real time without advancing the simulation.
       hitStop -= dt
@@ -1036,6 +1080,7 @@ export function useVersusDuel(
       for (let i = 0; i < steps && hitStop <= 0; i++) {
         snapshot()
         engine.step()
+        detectShots()
       }
       if (hitStop > 0) acc = 0
       // Particles freeze with the hit-stop, then burst out when it ends.
@@ -1080,6 +1125,8 @@ export function useVersusDuel(
     deflected = []
     dying = []
     endedFor = 0
+    cardShown = false
+    seenShots = new Set()
     pendingSlam = null
     raf = requestAnimationFrame(frame)
   }
