@@ -64,8 +64,9 @@ const STATUS_BLINK_STEPS = 30
 /** Below this HP fraction the HUD bar turns red. */
 const HP_LOW = 0.35
 
-/** Ball pixel size in arena units, the same as the weapon sprites (drawn at ~2×). */
-const BALL_PIXEL = 2
+/** Ball pixel size in arena units. A bit chunkier than the weapon sprites
+ *  (drawn at ~2×) so the 1-pixel outline stays readable while the ball moves. */
+const BALL_PIXEL = 3
 
 /** Hit-stop: real-time seconds the simulation freezes after a damage event.
  *  Render-only (the engine just isn't stepped), so determinism is unaffected. */
