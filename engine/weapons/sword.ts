@@ -17,7 +17,6 @@ export const sword: WeaponDefinition = {
   behaviors: [riposte({ multiplier: 2, windowSteps: 60, spinBoost: 2.5, reflectProjectiles: true })],
   hitbox: { shape: 'segment', length: 48, thickness: 10 },
   spriteId: 'weapon:sword',
-  iconId: 'icon:weapon:sword',
   pivot: { x: 7, y: 16 },
   spriteReach: 25,
 }

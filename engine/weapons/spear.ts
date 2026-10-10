@@ -15,7 +15,6 @@ export const spear: WeaponDefinition = {
   behaviors: [tipStrike({ fraction: 0.2, multiplier: 2 })], // outer 20% of the spear ×2
   hitbox: { shape: 'segment', length: 72, thickness: 8 },
   spriteId: 'weapon:spear',
-  iconId: 'icon:weapon:spear',
   pivot: { x: 6, y: 6 },
   spriteReach: 42,
 }

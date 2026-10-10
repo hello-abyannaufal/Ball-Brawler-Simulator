@@ -19,7 +19,6 @@ export const hammer: WeaponDefinition = {
     wallSlam: { damage: 6, windowSteps: 45 }, // hit a wall within 0.75 s → +6
   })],
   spriteId: 'weapon:hammer',
-  iconId: 'icon:weapon:hammer',
   pivot: { x: 5, y: 16 },
   spriteReach: 26,
 }

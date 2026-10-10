@@ -30,8 +30,6 @@ const C = {
   white: '#ffffff',
   ink: '#181425',
   purple: '#b55088',
-  slot: '#3a4466',
-  slotEdge: '#262b44',
 } as const
 
 /** Fill a crisp rectangle in integer pixels. */
@@ -98,19 +96,8 @@ const arrowProc: ProceduralDraw = (ctx) => {
   px(ctx, 10, 1, 1, 3, C.steel)
   px(ctx, 11, 2, 1, 1, C.white) // tip
 }
-const blasterShotProc: ProceduralDraw = (ctx) => {
-  px(ctx, 2, 3, 4, 2, C.cyan)
-  px(ctx, 1, 3, 1, 2, C.blue)
-}
 
-// ---- Hit-flash: distinct by SHAPE (round / diamond) ----
-const hitContactProc: ProceduralDraw = (ctx, w, h) => {
-  ctx.fillStyle = C.white
-  for (let a = 0; a < 8; a++) {
-    const ang = (a / 8) * Math.PI * 2
-    px(ctx, Math.round(w / 2 + Math.cos(ang) * 8) - 1, Math.round(h / 2 + Math.sin(ang) * 8) - 1, 2, 2, C.white)
-  }
-}
+// ---- Hit-flash (projectile hits): concentric diamond ----
 const hitProjectileProc: ProceduralDraw = (ctx, w, h) => {
   const cx = w / 2
   const cy = h / 2
@@ -122,41 +109,53 @@ const hitProjectileProc: ProceduralDraw = (ctx, w, h) => {
   }
 }
 
-// ---- Generic icon fallback (badge variant reserved for skills, plain for weapons) ----
-function iconProc(color: string, badge: boolean): ProceduralDraw {
-  return (ctx, w, h) => {
-    if (badge) {
-      px(ctx, 1, 1, w - 2, h - 2, C.slotEdge)
-      px(ctx, 2, 2, w - 4, h - 4, C.slot)
-    }
-    px(ctx, 5, 5, w - 10, h - 10, color)
+/** A pixel map (one char per pixel, '.' transparent), rows starting at `top`. */
+function gridProc(colors: Record<string, string>, rows: string[], top = 0): ProceduralDraw {
+  return (ctx) => {
+    rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) {
+        const c = colors[row[x]!]
+        if (c) px(ctx, x, top + y, 1, 1, c)
+      }
+    })
   }
 }
+
+// Scythe: the same pixels as scythe.png.
+const scytheProc = gridProc({
+  K: C.ink, s: '#5a6988', d: C.steelDark, l: C.steel, W: C.white,
+  t: '#e4a672', w: C.wood, p: C.purple, k: C.woodDark, q: '#68386c',
+}, [
+  '.............KKKKKKKKKK.........',
+  '...........KKssssssssssKK.......',
+  '..........KssddddddddddssK......',
+  '.........KllllllllldddddssK.....',
+  '........KllWWWWWWWllldddddsK....',
+  '........KWWKKKKKKKWWWllddddsK...',
+  '.........KK.......KKWWlldddssK..',
+  '....................KKWlldddsK..',
+  '......................KWlldddsK.',
+  '.......................KWllddsK.',
+  '........................KKKKKsK.',
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKldKsK.',
+  'KttwttpppwttwttwttwttwttwKddKK..',
+  'KwwkwwqqqkwwkwwkwwkwwkwwkKddK...',
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKdsK...',
+  '.........................KKKK...',
+], 4)
 
 // ---- Status icons (8×8, drawn at 2× in the HUD); same art as the PNGs ----
 const STATUS_COLORS: Record<string, string> = {
   K: C.ink, W: C.white, G: C.green, g: '#3e8948', B: C.blue, b: '#124e89',
   C: C.cyan, y: '#fee761', Y: C.gold, o: '#f77622',
 }
-function gridProc(rows: string[]): ProceduralDraw {
-  return (ctx) => {
-    rows.forEach((row, y) => {
-      for (let x = 0; x < row.length; x++) {
-        const c = STATUS_COLORS[row[x]!]
-        if (c) px(ctx, x, y, 1, 1, c)
-      }
-    })
-  }
-}
-const poisonProc = gridProc(['...KK...', '..KGGK..', '..KGGK..', '.KGWGGK.', 'KGWGGGgK', 'KGGGGggK', '.KggggK.', '..KKKK..'])
-const slowProc = gridProc(['KKKKKKKK', '.KbbbbK.', '..KBBK..', '...KK...', '...KK...', '..KbBK..', '.KBBBCK.', 'KKKKKKKK'])
-const stunProc = gridProc(['...KK...', '..KyYK..', '.KKyYKK.', 'KyyWYYoK', 'KYyYYooK', '.KKYoKK.', '..KYoK..', '...KK...'])
+const poisonProc = gridProc(STATUS_COLORS, ['...KK...', '..KGGK..', '..KGGK..', '.KGWGGK.', 'KGWGGGgK', 'KGGGGggK', '.KggggK.', '..KKKK..'])
+const slowProc = gridProc(STATUS_COLORS, ['KKKKKKKK', '.KbbbbK.', '..KBBK..', '...KK...', '...KK...', '..KbBK..', '.KBBBCK.', 'KKKKKKKK'])
+const stunProc = gridProc(STATUS_COLORS, ['...KK...', '..KyYK..', '.KKyYKK.', 'KyyWYYoK', 'KYyYYooK', '.KKYoKK.', '..KYoK..', '...KK...'])
 
 const SIZE_ENTITY = 32
 const SIZE_SPEAR_W = 48
 const SIZE_SPEAR_H = 12
-const SIZE_PROJ = 8
-const SIZE_ICON = 16
 const SIZE_STATUS = 8
 
 /** The full sprite registry. */
@@ -170,18 +169,9 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
 
   // Projectiles — procedural until PNGs exist.
   'projectile:arrow': { kind: 'procedural', width: 12, height: 5, draw: arrowProc },
-  'projectile:blaster-shot': { kind: 'procedural', width: SIZE_PROJ, height: SIZE_PROJ, draw: blasterShotProc },
 
   // Hit-flash FX.
-  'fx:hit-contact': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hitContactProc },
   'fx:hit-projectile': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hitProjectileProc },
-
-  // Weapon icons (plain silhouette).
-  'icon:weapon:sword': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
-  'icon:weapon:hammer': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
-  'icon:weapon:spear': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
-  'icon:weapon:bow': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
-  'icon:weapon:scythe': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
 
   // Status icons (HUD). Keyed by status id: `status:<id>`.
   'status:poison': { kind: 'image', src: '/sprites/icons/status/poison.png', width: SIZE_STATUS, height: SIZE_STATUS },
@@ -197,6 +187,7 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'weapon:hammer:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hammerProc },
   'weapon:spear:proc': { kind: 'procedural', width: SIZE_SPEAR_W, height: SIZE_SPEAR_H, draw: spearProc },
   'weapon:bow:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: bowProc },
+  'weapon:scythe:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: scytheProc },
 }
 
 /** Resolve a spriteId to its source, or the placeholder when unknown. */

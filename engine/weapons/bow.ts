@@ -22,7 +22,6 @@ export const bow: WeaponDefinition = {
     blockable: true, // arrows can be swatted by melee weapons
   })],
   spriteId: 'weapon:bow',
-  iconId: 'icon:weapon:bow',
   pivot: { x: 19, y: 16 },
   spriteReach: 10,
 }

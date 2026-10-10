@@ -97,7 +97,7 @@ SavedBall {
 ## 4. Cara menambah roda baru (mis. Trait)
 
 1. **Definisi + registry**: pastikan jenis baru punya registry (mis. `traitRegistry`) dengan
-   `ids()` dan `get(id)` (minimal `name`, opsional `spriteId`/`iconId`).
+   `ids()` dan `get(id)` (minimal `name`, opsional `spriteId`).
 2. **Jenis roda**: tambahkan ke `WheelKind` dan default `weights` di `stores/roulette.ts`:
    ```ts
    export type WheelKind = 'weapon' | 'trait'

@@ -22,7 +22,6 @@ export interface WeaponDefinition {
   // --- Visual-reference only. Ignored by the engine; no effect on simulation
   //     or determinism. Consumed solely by the app-layer renderer. ---
   readonly spriteId?: string // arena sprite id
-  readonly iconId?: string // 16x16 roulette/library icon id
   readonly pivot?: { x: number; y: number } // sprite-pixel rotation point
   readonly spriteReach?: number // sprite pixels from pivot to tip; renderer scale = length / spriteReach
 }

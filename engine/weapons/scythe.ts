@@ -18,7 +18,6 @@ export const scythe: WeaponDefinition = {
   // (≈ 2.2 hits per reap on average, up to ~7; 20 seeds × both slots).
   behaviors: [reap({ windowSteps: 60, spinBoost: 10, hitCooldownSteps: 4 })],
   spriteId: 'weapon:scythe',
-  iconId: 'icon:weapon:scythe',
   pivot: { x: 5, y: 12 }, // above the shaft, so the tip hitbox sits on the blade
   spriteReach: 25,
 }

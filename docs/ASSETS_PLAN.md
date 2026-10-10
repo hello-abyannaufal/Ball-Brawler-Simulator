@@ -46,8 +46,8 @@ backgrounds). Do not introduce other hues.
 PNGs are generated **in code** with the `pixel-art` skill (Pillow, palette
 locked to EDG32, validated, previewed upscaled before hand-off), not with an
 image model. Each manifest image entry can have a procedural copy under
-`<id>:proc`, used if the PNG fails to load; for the status icons that copy holds
-the exact same pixel map, so the art can be regenerated from it.
+`<id>:proc`, used if the PNG fails to load; for the status icons and the scythe
+that copy holds the exact same pixel map, so the art can be regenerated from it.
 
 ### Weapon sprites: pivot, anchor and scale
 
@@ -79,7 +79,7 @@ the exact same pixel map, so the art can be regenerated from it.
 | Asset | Size | Status | Where / notes |
 | ----- | ---- | ------ | ------------- |
 | Weapon sprites (sword, hammer, spear, bow, scythe) | 32×32 (spear 48×12) | ✅ PNG | `public/sprites/weapons/`; also used on the roulette wheel, Versus/Library cards (cropped), menu and splash |
-| Weapon procedural fallbacks | — | 🧩 Code | `weapon:<id>:proc` for sword, hammer, spear, bow (scythe has none: placeholder) |
+| Weapon procedural fallbacks | — | 🧩 Code | `weapon:<id>:proc`; simple shapes for sword, hammer, spear, bow; scythe is an exact pixel copy of its PNG |
 | Status icons (poison, slow, stun) | 8×8, drawn 2× | ✅ PNG | `public/sprites/icons/status/`, id `status:<status id>`; in-frame HUD |
 | Status icons (freeze, frozen) | 8×8 | ⏳ Planned | with the Freeze status |
 | Arrow projectile | 12×5, drawn 2× | 🧩 Code | `projectile:arrow`; pivot on the tip, where the hit circle is |
@@ -92,19 +92,12 @@ the exact same pixel map, so the art can be regenerated from it.
 | Winner / draw card | — | 🧩 Code | `drawWinner` |
 | Arena floor and wall | 32-unit tiles | 🧩 Code | two-tone checker floor + 4px ink wall stroke (`clear`) |
 | Navigation icons | 8×8 | 🧩 Code | inline SVG paths in `NavigationMenu.vue` |
-| Panel / button 9-slice | 24×24 / 96×24 strip | ⏳ Optional PNG | `useNineSlice` can load `ui/panel.png`, `ui/button.png`, but no component uses it yet; the UI is CSS (`.px-panel`, `.px-btn-*`) |
 | Roulette wheel | — | 🧩 Code | `RouletteWheel.vue`, slices carry weapon sprites |
 | Trait / Ability icons | 16×16 | ⏳ Planned | after the Trait & Ability design is settled |
 | Ball fill patterns | 16×16 or 32×32 | ⏳ Planned | optional, see below |
 
-### Registered but unused
-
-Kept in the manifest, referenced by nothing; candidates for removal:
-
-- `projectile:blaster-shot` — from the removed Blaster skill.
-- `fx:hit-contact` — melee hits use blood particles instead of a flash.
-- `icon:weapon:<id>` (generic procedural shapes, set as `iconId` on each weapon)
-  — the UI shows the cropped arena sprite instead.
+UI panels and buttons are plain CSS (`.px-panel`, `.px-btn-*` in
+`assets/css/tailwind.css`), so they need no image assets.
 
 ## File Layout
 
@@ -114,7 +107,6 @@ public/sprites/
   icons/status/   poison.png slow.png stun.png                        ✅
                   freeze.png frozen.png                               ⏳
   icons/traits/   (Trait / Ability icons)                             ⏳
-  ui/             panel.png button.png                                ⏳ optional
   patterns/       stripes.png checker.png dots.png                    ⏳ optional
 ```
 
@@ -181,17 +173,6 @@ draws the magenta placeholder.
 To be designed once Trait & Ability are settled. Keep them distinct from weapon
 art in the same row: **a symbol inside a round badge** (weapon art is a bare
 silhouette).
-
-### Panel / button 9-slice ⏳ optional (tile 8×8)
-
-Only worth making once something renders through `useNineSlice`; today the
-pages style panels and buttons with CSS.
-
-- **button.png** — 96×24 horizontal strip of four 24×24 frames in order:
-  normal, hover, pressed, disabled; beveled retro look, 8px 9-slice margins
-  that tile cleanly, no gutter between frames.
-- **panel.png** — 24×24 RPG window border, a 3×3 grid of 8×8 tiles (8px
-  margins), clean corners, solid or subtly textured center.
 
 ### Ball fill patterns ⏳ optional (16×16 or 32×32, tileable)
 
