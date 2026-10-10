@@ -4,11 +4,9 @@ import type { EngineEvent } from '~/engine/events'
 import type { Ball, Entity, EntityId, Projectile, WeaponEntity } from '~/engine/entities'
 import { createEngine, TIMESTEP, type Engine } from '~/engine/engine'
 import { useSprites } from '~/composables/useSprites'
-import { usePixelFont } from '~/composables/usePixelFont'
 import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
 import {
-  BALL_CIRCLE, BALL_DEFAULT_FILL, BALL_GRID, BALL_OUTLINE_COLOR, BALL_OUTLINE_OFFSETS,
-  BALL_SHADE, BALL_SHADE_STYLE, BALL_SHINE, BALL_SHINE_STYLE, type PixelRect,
+  BALL_DEFAULT_FILL, BALL_OUTLINE_COLOR, BALL_SHADE_STYLE, BALL_SHINE_STYLE,
 } from '~/utils/pixelBall'
 import '~/engine/weapons/index'
 import { weaponRegistry } from '~/engine/weapons/registry'
@@ -42,7 +40,26 @@ const EDG = {
   hpFrame: '#181425',
   hitbox: '#fee761',
   text: '#ffffff',
+  panel: '#3a4466',
+  panelShade: '#262b44',
+  hpLow: '#e43b44',
+  fog: '#c0cbdc',
+  sand: '#ead4aa',
+  gold: '#feae34',
+  goldShadow: '#733e39',
 }
+
+/** In-frame HUD (part of the recording), in arena units. Text uses the page's
+ *  pixel font, which is crisp at multiples of 8. */
+const FONT = '"Press Start 2P", monospace'
+const HUD_H = 46
+const HUD_GAP = 8 // between the HUD and the arena when it sits above it
+const HUD_VS_W = 28
+/** Below this HP fraction the HUD bar turns red. */
+const HP_LOW = 0.35
+
+/** Ball pixel size in arena units, the same as the weapon sprites (drawn at ~2×). */
+const BALL_PIXEL = 2
 
 /** Hit-stop: real-time seconds the simulation freezes after a damage event.
  *  Render-only (the engine just isn't stepped), so determinism is unaffected. */
@@ -143,7 +160,6 @@ export function useVersusDuel(
 ): VersusDuel {
   const reduced = !!opts?.reducedMotion
   const { preloadAll, drawSprite } = useSprites()
-  const { preloadFont, drawText } = usePixelFont()
 
   const view: VersusView = {
     hp: shallowRef<HpView[]>([]),
@@ -157,6 +173,7 @@ export function useVersusDuel(
   let acc = 0
   let hitStop = 0 // seconds of freeze remaining
   let particles: Particle[] = []
+  const ballSprites = new Map<string, HTMLCanvasElement>()
   let flashes: Flash[] = []
   let hitFlashes: HitFlash[] = []
   let shockwaves: Shockwave[] = []
@@ -483,34 +500,62 @@ export function useVersusDuel(
     ctx.strokeRect(0, 0, width, height)
   }
 
-  /** The same pixel-art ball as the fighter picker (PixelBall.vue): the 14×14
-   *  sprite, outline included, spans the hitbox diameter. Cell edges snap to
-   *  whole pixels so the pixels stay crisp at any ball size. */
+  /** The fighter picker's pixel-art ball (PixelBall.vue: outline, shade
+   *  crescent, shine), drawn at the weapon sprites' pixel size so ball and
+   *  weapon match. The outline sits inside the hitbox. */
   function drawBall(ctx: CanvasRenderingContext2D, b: Ball): void {
     const app = findAppearance(b.id)
     const fill = app?.type === 'color' ? app.value : BALL_DEFAULT_FILL // pattern/image handled later
-    const cell = (b.radius * 2) / (BALL_GRID + 2)
-    const left = b.position.x - b.radius
-    const top = b.position.y - b.radius
-    const rects = (list: readonly PixelRect[], dx: number, dy: number) => {
-      for (const [x, y, w, h] of list) {
-        const x0 = Math.round(left + (x + dx) * cell)
-        const y0 = Math.round(top + (y + dy) * cell)
-        ctx.fillRect(x0, y0, Math.round(left + (x + dx + w) * cell) - x0, Math.round(top + (y + dy + h) * cell) - y0)
+    const cells = Math.max(4, Math.round((b.radius * 2) / BALL_PIXEL))
+    const size = cells * BALL_PIXEL
+    ctx.drawImage(
+      ballSprite(cells, fill),
+      Math.round(b.position.x - size / 2),
+      Math.round(b.position.y - size / 2),
+      size,
+      size,
+    )
+  }
+
+  /** One pixel-art ball `cells` wide, baked once per size and color. */
+  function ballSprite(cells: number, fill: string): HTMLCanvasElement {
+    const key = `${cells}|${fill}`
+    const cached = ballSprites.get(key)
+    if (cached) return cached
+    const c = document.createElement('canvas')
+    c.width = c.height = cells
+    const g = c.getContext('2d')!
+    const r = cells / 2
+    const shift = cells * 0.18 // shade crescent: what a circle moved up-left misses
+    for (let y = 0; y < cells; y++) {
+      for (let x = 0; x < cells; x++) {
+        const dx = x + 0.5 - r
+        const dy = y + 0.5 - r
+        const d = Math.hypot(dx, dy)
+        if (d > r) continue
+        if (d > r - 1) {
+          g.fillStyle = BALL_OUTLINE_COLOR
+          g.fillRect(x, y, 1, 1)
+          continue
+        }
+        g.globalAlpha = 1
+        g.fillStyle = fill
+        g.fillRect(x, y, 1, 1)
+        const angle = (Math.atan2(dy, dx) * 180) / Math.PI
+        if (Math.hypot(dx + shift, dy + shift) > r - 1.5) {
+          g.globalAlpha = BALL_SHADE_STYLE.opacity
+          g.fillStyle = BALL_SHADE_STYLE.color
+          g.fillRect(x, y, 1, 1)
+        } else if (d > r - 3 && d <= r - 2 && angle > -165 && angle < -105) {
+          g.globalAlpha = BALL_SHINE_STYLE.opacity
+          g.fillStyle = BALL_SHINE_STYLE.color
+          g.fillRect(x, y, 1, 1)
+        }
+        g.globalAlpha = 1
       }
     }
-    ctx.save()
-    ctx.fillStyle = BALL_OUTLINE_COLOR
-    for (const [dx, dy] of BALL_OUTLINE_OFFSETS) rects(BALL_CIRCLE, dx, dy)
-    ctx.fillStyle = fill
-    rects(BALL_CIRCLE, 1, 1)
-    ctx.globalAlpha = BALL_SHADE_STYLE.opacity
-    ctx.fillStyle = BALL_SHADE_STYLE.color
-    rects(BALL_SHADE, 1, 1)
-    ctx.globalAlpha = BALL_SHINE_STYLE.opacity
-    ctx.fillStyle = BALL_SHINE_STYLE.color
-    rects(BALL_SHINE, 1, 1)
-    ctx.restore()
+    ballSprites.set(key, c)
+    return c
   }
 
   function findAppearance(id: EntityId) {
@@ -681,11 +726,101 @@ export function useVersusDuel(
     drawHpBars(ctx)
     if (opts?.showHitboxes) drawHitboxes(ctx)
 
-    if (engine.ended) {
-      const label =
-        engine.winner === null ? 'DRAW' : `WINNER: ${winnerLabel(engine.winner!)}`
-      drawText(ctx, label, 8, 8, 2)
+    if (engine.ended) drawWinner(ctx)
+    // Above the arena when the letterbox has room (9:16, 4:5), else over its top.
+    const above = (el.height - ah * scale) / 2 / scale >= HUD_H + HUD_GAP
+    drawHud(ctx, above ? -HUD_H - HUD_GAP : HUD_GAP)
+  }
+
+  function drawLabel(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    size: number,
+    color: string,
+    align: CanvasTextAlign = 'left',
+    shadow?: string,
+  ): void {
+    ctx.font = `${size}px ${FONT}`
+    ctx.textAlign = align
+    ctx.textBaseline = 'top'
+    if (shadow) {
+      ctx.fillStyle = shadow
+      ctx.fillText(text, x + size / 8, y + size / 8)
     }
+    ctx.fillStyle = color
+    ctx.fillText(text, x, y)
+  }
+
+  /** Cut a label to `max` characters (the pixel font is monospace). */
+  function fit(text: string, max: number): string {
+    return text.length <= max ? text : `${text.slice(0, max - 1)}.`
+  }
+
+  /** Name, HP bar and HP count of both fighters, VS in between. */
+  function drawHud(ctx: CanvasRenderingContext2D, y: number): void {
+    const { width } = duel.arenaConfig
+    const balls = engine!.world.entities.filter((e): e is Ball => e.kind === 'ball')
+    const panelW = (width - HUD_VS_W) / 2
+    ctx.save()
+    balls.slice(0, 2).forEach((b, i) => {
+      const x = i === 0 ? 0 : width - panelW
+      // Panel: slate body, ink frame, darker bottom edge (like .px-panel).
+      ctx.fillStyle = EDG.wall
+      ctx.fillRect(x, y, panelW, HUD_H)
+      ctx.fillStyle = EDG.panel
+      ctx.fillRect(x + 2, y + 2, panelW - 4, HUD_H - 4)
+      ctx.fillStyle = EDG.panelShade
+      ctx.fillRect(x + 2, y + HUD_H - 4, panelW - 4, 2)
+
+      const pad = 6
+      const right = i === 1
+      const tx = right ? x + panelW - pad : x + pad
+      const align = right ? 'right' : 'left'
+      const name = (opts?.names?.[i] ?? `Ball ${b.id}`).toUpperCase()
+      drawLabel(ctx, fit(name, Math.floor((panelW - pad * 2) / 8)), tx, y + pad, 8, EDG.text, align)
+
+      const barW = panelW - pad * 2
+      const barY = y + 18
+      ctx.fillStyle = EDG.wall
+      ctx.fillRect(x + pad, barY, barW, 8)
+      const f = b.alive ? hpBarFraction(b.hp, b.maxHp) : 0
+      const fillW = Math.round((barW - 4) * f)
+      ctx.fillStyle = f < HP_LOW ? EDG.hpLow : EDG.hpFill
+      // The right fighter's bar drains toward the middle, mirroring the left.
+      ctx.fillRect(right ? x + pad + 2 + (barW - 4 - fillW) : x + pad + 2, barY + 2, fillW, 4)
+
+      const hpText = `${Math.max(0, Math.ceil(b.alive ? b.hp : 0))}/${b.maxHp}`
+      drawLabel(ctx, hpText, tx, y + 31, 8, EDG.fog, align)
+    })
+    drawLabel(ctx, 'VS', width / 2, y + HUD_H / 2 - 4, 8, EDG.hpLow, 'center', EDG.wall)
+    ctx.restore()
+  }
+
+  /** Result card in the middle of the arena. */
+  function drawWinner(ctx: CanvasRenderingContext2D): void {
+    const { width, height } = duel.arenaConfig
+    const draw = engine!.winner === null
+    const name = draw ? 'DRAW' : winnerLabel(engine!.winner!)
+    // Big type when the name fits the card, else the small size.
+    const cardW = width - 48
+    const size = name.length * 16 <= cardW - 24 ? 16 : 8
+    const cardH = draw ? 52 : 72
+    const cx = width / 2
+    const top = Math.round((height - cardH) / 2)
+    ctx.save()
+    ctx.fillStyle = EDG.gold
+    ctx.fillRect(24, top - 4, cardW, cardH + 8)
+    ctx.fillStyle = EDG.wall
+    ctx.fillRect(24, top, cardW, cardH)
+    if (draw) {
+      drawLabel(ctx, 'DRAW', cx, top + (cardH - size) / 2, size, EDG.gold, 'center', EDG.goldShadow)
+    } else {
+      drawLabel(ctx, 'WINNER:', cx, top + 16, 8, EDG.sand, 'center')
+      drawLabel(ctx, fit(name, Math.floor((cardW - 24) / 8)), cx, top + 36, size, EDG.gold, 'center', EDG.goldShadow)
+    }
+    ctx.restore()
   }
 
   // --- loop ---
@@ -731,8 +866,10 @@ export function useVersusDuel(
 
   function start(): void {
     if (!engine) build()
-    preloadFont()
-    preloadAll().then(() => {
+    // The HUD uses the page's web font; wait for it so the first frames don't
+    // fall back to the system monospace.
+    const font = document.fonts?.load(`8px ${FONT}`).catch(() => undefined)
+    Promise.all([preloadAll(), font]).then(() => {
       lastTime = 0
       acc = 0
       raf = requestAnimationFrame(frame)

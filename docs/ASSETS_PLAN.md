@@ -92,7 +92,6 @@ backgrounds). Do not introduce other hues.
 | Roulette reel            | tileable   | strip background + highlight            |
 | Arena floor tile         | 32×32      | seamless/tileable                       |
 | Arena wall border        | 9-slice    | tile 16×16                              |
-| Bitmap font              | 8×8 grid   | fixed-width, ASCII 32–126, 16 columns   |
 
 ### Icon style distinction (16×16)
 
@@ -101,12 +100,6 @@ them visually distinct so users can tell them apart in one row:
 
 - **Weapon icon:** a full object silhouette (just the weapon).
 - **Skill icon:** a symbol inside a round badge / circular frame.
-
-### Bitmap font (fixed grid, no external metrics)
-
-- Atlas of **8×8 cells**, ASCII 32–126, laid out in **16 columns**.
-- Glyph index from char code: `col = (code - 32) % 16`, `row = ⌊(code - 32) / 16⌋`.
-- No JSON/BMFont metrics file — fixed-width grid only.
 
 > NOTE: Balls are NOT sprites. A ball is a circle-clipped fill (solid color /
 > pixel pattern / user image) handled by the renderer, so ball skins are fully
@@ -128,7 +121,6 @@ public/sprites/
   roulette/  reel-bg.png spin-button.png landing-glow.png
   arena/     floor-tile.png wall-border.png
   patterns/  stripes.png checker.png dots.png   (optional ball fills)
-  font/      pixel-font.png  (fixed 8×8 grid, no metrics file)
 ```
 
 > Every entry has a procedural fallback drawn in code, so the game runs even
@@ -263,14 +255,6 @@ Global Rules in mind for all of them.
     tileable, subtle dungeon or stone pattern, limited palette." (no alpha)
 27. **wall-border.png** — "16-bit pixel arena wall/border, 9-slice, tiles at
     16×16, reads as a solid boundary." (no alpha on solid parts)
-
-### Font
-
-28. **pixel-font.png** — "monospace 16-bit pixel bitmap font atlas, fixed 8×8
-    glyph cells, ASCII 32–126 laid out in 16 columns (so 16 wide × 6 rows of
-    cells = 128×48 px), uppercase + lowercase + digits + basic punctuation,
-    white glyphs on a fully transparent background, no padding between cells,
-    even spacing. No separate metrics file (fixed-width grid)."
 
 ### Optional ball fill patterns (16×16 or 32×32, tileable)
 

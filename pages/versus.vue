@@ -11,7 +11,7 @@ import { useSettingsStore } from '~/stores/settings'
 import { useLibraryStore } from '~/stores/library'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { raceRegistry } from '~/engine/races/registry'
-import { defaultBalls, hpBarFraction, placeForDuel } from '~/utils/duel'
+import { defaultBalls, placeForDuel } from '~/utils/duel'
 import { BALL_DEFAULT_FILL } from '~/utils/pixelBall'
 import { spriteSource } from '~/assets/sprites/manifest'
 import '~/engine/weapons/index' // populate the registry
@@ -269,10 +269,10 @@ function startAutoRecord(): void {
   recorder.start()
 }
 
-// Stop recording within 2s after a winner is determined, then save (Req 14.6).
+// Stop recording 3s after a winner is determined (time to read the result card), then save.
 watch(winner, (w) => {
   if (w === undefined || !recorder || !autoRecording.value) return
-  window.setTimeout(() => void finishRecording(), 1500)
+  window.setTimeout(() => void finishRecording(), 3000)
 })
 
 async function finishRecording(): Promise<void> {
@@ -414,34 +414,6 @@ onBeforeUnmount(() => {
     </div>
 
     <section v-else class="mx-auto flex w-full max-w-[760px] flex-col items-center gap-6">
-      <div class="flex w-full items-center gap-3">
-        <template v-for="(h, i) in hp" :key="h.id">
-          <span v-if="i === 1" class="font-pixel text-sm text-edg-red [text-shadow:3px_3px_0_#181425]">VS</span>
-          <div
-            class="px-panel flex min-w-0 flex-1 flex-col gap-2 px-3.5 pb-3.5 pt-3"
-            :class="i === 1 ? 'items-end text-right' : ''"
-          >
-            <span class="max-w-full truncate font-pixel text-[10px] uppercase">{{ duelNames[i] ?? `Ball ${h.id}` }}</span>
-            <div
-              class="flex h-4 w-full bg-edg-ink p-1"
-              :class="i === 1 ? 'justify-end' : ''"
-              role="meter"
-              :aria-label="`${duelNames[i] ?? `Ball ${h.id}`} HP`"
-              aria-valuemin="0"
-              :aria-valuemax="h.maxHp"
-              :aria-valuenow="h.hp"
-            >
-              <div
-                class="h-2"
-                :class="hpBarFraction(h.hp, h.maxHp) < 0.35 ? 'bg-edg-red' : 'bg-edg-green'"
-                :style="{ width: `${hpBarFraction(h.hp, h.maxHp) * 100}%` }"
-              />
-            </div>
-            <span class="text-xl leading-none text-edg-fog">{{ Math.max(0, Math.ceil(h.hp)) }} / {{ h.maxHp }}</span>
-          </div>
-        </template>
-      </div>
-
       <p v-if="recError" role="alert" class="bg-edg-ink px-3 py-2 text-[22px] text-edg-sun">
         {{ recError }}
       </p>
@@ -466,19 +438,10 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <div
-        v-if="winner !== undefined"
-        role="status"
-        class="mt-4 flex w-full max-w-[480px] flex-col items-center gap-2.5 bg-edg-ink px-3 py-[18px] shadow-[0_-4px_0_#feae34,0_4px_0_#feae34]"
-      >
-        <template v-if="winner === null">
-          <span class="font-pixel text-[clamp(20px,3vh,28px)] text-edg-gold [text-shadow:3px_3px_0_#733e39]">DRAW</span>
-        </template>
-        <template v-else>
-          <span class="font-pixel text-xs text-edg-sand">Winner:</span>
-          <span class="font-pixel text-[clamp(20px,3vh,28px)] uppercase text-edg-gold [text-shadow:3px_3px_0_#733e39]">{{ winnerName }}</span>
-        </template>
-      </div>
+      <!-- The result is drawn on the canvas (so it is recorded); announce it too. -->
+      <p v-if="winner !== undefined" role="status" class="sr-only">
+        {{ winner === null ? 'Draw' : `Winner: ${winnerName}` }}
+      </p>
 
       <div class="mt-3 flex w-full max-w-[480px] flex-wrap gap-5">
         <button

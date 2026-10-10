@@ -1,11 +1,10 @@
 /**
- * The pixel-art ball shared by the fighter picker (PixelBall.vue) and the
- * Versus canvas, so a ball looks the same in both. Rects are [x, y, w, h] on a
- * 12×12 grid; the 1-cell outline makes the full sprite 14×14.
+ * The pixel-art ball of the fighter picker (PixelBall.vue). Rects are
+ * [x, y, w, h] on a 12×12 grid; the 1-cell outline makes the full sprite 14×14.
+ * The Versus canvas draws the same look (colors and styles below) at a finer
+ * pixel size to match the weapon sprites.
  */
 export type PixelRect = readonly [number, number, number, number]
-
-export const BALL_GRID = 12
 
 export const BALL_CIRCLE: readonly PixelRect[] = [
   [4, 0, 4, 1], [2, 1, 8, 1], [1, 2, 10, 2], [0, 4, 12, 4], [1, 8, 10, 2], [2, 10, 8, 1], [4, 11, 4, 1],

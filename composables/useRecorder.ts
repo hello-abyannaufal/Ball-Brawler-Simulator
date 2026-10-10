@@ -37,6 +37,9 @@ export function pickMimeType(
   return null
 }
 
+/** Video bitrate for recordings: enough for 1080×1920 at 60 fps. */
+export const VIDEO_BITRATE = 12_000_000
+
 export class RecordingUnsupportedError extends Error {
   constructor() {
     super('Recording is not supported in this browser.')
@@ -79,7 +82,9 @@ export function createRecorder(
   }
 
   const chunks: Blob[] = []
-  const mr = new MediaRecorder(stream, { mimeType })
+  // Without a bitrate the browser picks a low default (~2.5 Mbps), and the
+  // encoder makes large flat areas (the letterbox) flicker at 1080p60.
+  const mr = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: VIDEO_BITRATE })
   mr.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) chunks.push(e.data)
   }
