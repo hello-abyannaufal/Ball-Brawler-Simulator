@@ -1,7 +1,14 @@
 # Assets Plan — Ball Battle Simulator (Retro / Pixel-Art)
 
-This document is the single catalog of visual assets for the project and the
-generation prompts for each one. The whole app uses a retro, pixel-art look.
+This document is the single catalog of visual assets for the project: what
+exists, how each one is made, and what is still planned. The whole app uses a
+retro, pixel-art look.
+
+**Status legend** used below:
+
+- ✅ **PNG** — a file under `public/sprites/`, registered in `assets/sprites/manifest.ts`.
+- 🧩 **Code** — drawn in code (canvas or inline SVG); no file needed.
+- ⏳ **Planned** — not made yet.
 
 ## Global Rules (apply to EVERY asset)
 
@@ -15,11 +22,12 @@ generation prompts for each one. The whole app uses a retro, pixel-art look.
   the 32 palette colors — the palette is only for solid pixels; never fill the
   background with a palette color.
 - **No blur / no smoothing:** pixels are square and sharp. Rendered in-app with
-  `imageSmoothingEnabled = false` at integer scale (×2, ×3, ×4).
+  `imageSmoothingEnabled = false`. Prefer integer scales (×2, ×3, ×4); see the
+  weapon note below for the one exception.
 - **Readability:** each asset must read clearly at 1× (its native pixel grid).
 - **Distinction without color:** where variants must be distinguishable
-  (hit-flash), differ by SHAPE/PATTERN, not color alone (color-blind + reduced
-  motion safe).
+  (status icons, hit FX), differ by SHAPE/PATTERN, not color alone
+  (color-blind + reduced motion safe).
 
 ### Official Palette — Endesga 32 (EDG32)
 
@@ -33,36 +41,30 @@ backgrounds). Do not introduce other hues.
 #262b44 #181425 #ff0044 #68386c #b55088 #f6757a #e8b796 #c28569
 ```
 
-### Pivot / centering (directional items)
+### How PNGs are made
+
+PNGs are generated **in code** with the `pixel-art` skill (Pillow, palette
+locked to EDG32, validated, previewed upscaled before hand-off), not with an
+image model. Each manifest image entry can have a procedural copy under
+`<id>:proc`, used if the PNG fails to load; for the status icons that copy holds
+the exact same pixel map, so the art can be regenerated from it.
+
+### Weapon sprites: pivot, anchor and scale
 
 - "Forward" always points **right (+x)**.
-- Every directional sprite has a **pivot** `(x, y)` in sprite pixels: the point
-  that sits on the ball's hand and that the sprite rotates around. The
-  renderer draws it as:
-  `ctx.translate(handX, handY); ctx.rotate(angle); ctx.drawImage(img, -pivot.x * scale, -pivot.y * scale, ...)`.
-- **Default pivot = left-middle** `(grip x, height/2)`: held weapons put the
-  grip on the left so the blade/head/tip has room to the right and covers its
-  hitbox. On rotation the tip swings while the grip stays at the hand.
-- **Anchor point (held weapons):** the renderer places the pivot at the
-  ball's surface along its facing, `hand = owner.position + facing ×
-  owner.radius`, NOT at `WeaponEntity.position`. The engine sets
-  `WeaponEntity.position` to the hitbox center (mid-blade,
-  `owner.radius + length/2`) for collision; do not change it, and do not draw
-  the grip there or the weapon appears pushed forward by half its length.
-- **Anchor point (orbit weapons):** draw at `WeaponEntity.position` (the
-  orbiting center) with pivot `(16, 16)`.
-- Pivots live on `WeaponDefinition.pivot` (optional, render-only). If a pivot
-  is missing, use the default left-middle.
-- **Per-weapon pivots** (these override the default):
-
-  | Weapon         | Canvas | Pivot (x, y) | Where                            |
-  | -------------- | ------ | ------------ | -------------------------------- |
-  | sword          | 32×32  | (7, 16)      | middle of the grip               |
-  | hammer         | 32×32  | (5, 16)      | end of the handle                |
-  | spear          | 48×12  | (6, 6)       | near the butt of the shaft       |
-  | bow            | 32×32  | (19, 16)     | the grip at the middle of the bow |
-  | scythe         | 32×32  | (5, 12)      | above the shaft, so the tip hitbox sits on the blade |
-  | orbiting-blade | 32×32  | (16, 16)     | canvas center (spins in place)   |
+- Every weapon sprite has a **pivot** `(x, y)` in sprite pixels: the grip, the
+  point the sprite rotates around (`WeaponDefinition.pivot`, render-only).
+- **Anchor:** the renderer puts the pivot on the ball's surface along the
+  weapon's angle (`gripAnchor`: `owner.position + facing × owner.radius`), NOT
+  at `WeaponEntity.position`. The engine sets `WeaponEntity.position` to the
+  hitbox center for collision; do not draw the grip there or the weapon appears
+  pushed forward by half its length.
+- **Scale:** `WeaponDefinition.spriteReach` is the sprite pixels from pivot to
+  tip; the renderer scales the sprite by `length / spriteReach` so the drawn
+  grip→tip span equals the engine's weapon length (what you see is the hitbox).
+  This makes weapon scales **non-integer** (≈1.6–2.4×) — the one exception to
+  the integer-scale rule.
+- Verify every weapon with *Show hitboxes* on `/versus`.
 
 ### Spritesheet rules
 
@@ -72,216 +74,141 @@ backgrounds). Do not introduce other hues.
   slices by `frameIndex × frameWidth`.
 - Single-state assets are one PNG with no frames.
 
-## Base Sizes
+## Asset Inventory
 
-| Category                 | Pixel grid | Notes                                   |
-| ------------------------ | ---------- | --------------------------------------- |
-| Arena weapon sprites     | 32×32      | spear is 48×12 (long)                   |
-| Projectile               | 8×8        | arrows / blaster shots                  |
-| Hit-flash                | 32×32      | 3 shape-distinct variants               |
-| Skill icon               | 16×16      | roulette + library slots                |
-| Weapon icon              | 16×16      | roulette + library slots (≠ arena art)  |
-| Nav / UI icon            | 16×16      | menu + toggles                          |
-| Status icon              | 8×8        | in-frame HUD, drawn at 2× (16 units)    |
-| Button (9-slice)         | 96×24 strip | 4 frames of 24×24 (9-slice margin 8px) |
-| Panel / window (9-slice) | 24×24      | 3×3 grid of 8×8 tiles (margin 8px)      |
-| HP bar frame             | 64×12      | empty frame                             |
-| HP bar fill              | 1×8        | 1px-wide tileable fill, clipped to %    |
-| Checkbox                 | 32×16 strip | 2 frames of 16×16 (unchecked, checked) |
-| Toggle                   | 32×16 strip | 2 frames of 16×16 (off, on)            |
-| Spin button              | strip      | 2 frames (idle, pressed)                |
-| Roulette reel            | tileable   | strip background + highlight            |
-| Arena floor tile         | 32×32      | seamless/tileable                       |
-| Arena wall border        | 9-slice    | tile 16×16                              |
+| Asset | Size | Status | Where / notes |
+| ----- | ---- | ------ | ------------- |
+| Weapon sprites (sword, hammer, spear, bow, scythe) | 32×32 (spear 48×12) | ✅ PNG | `public/sprites/weapons/`; also used on the roulette wheel, Versus/Library cards (cropped), menu and splash |
+| Weapon procedural fallbacks | — | 🧩 Code | `weapon:<id>:proc` for sword, hammer, spear, bow (scythe has none: placeholder) |
+| Status icons (poison, slow, stun) | 8×8, drawn 2× | ✅ PNG | `public/sprites/icons/status/`, id `status:<status id>`; in-frame HUD |
+| Status icons (freeze, frozen) | 8×8 | ⏳ Planned | with the Freeze status |
+| Arrow projectile | 12×5, drawn 2× | 🧩 Code | `projectile:arrow`; pivot on the tip, where the hit circle is |
+| Hit flash (projectile) | 32×32 | 🧩 Code | `fx:hit-projectile`, concentric diamond; only projectile hits flash |
+| Blood burst, sparks, clash flash | particles | 🧩 Code | `useVersusDuel.ts`, render-only |
+| Shockwave (wall slam gray, parry white) | ring | 🧩 Code | `useVersusDuel.ts`, render-only |
+| Weapon trails (riposte gold, reap steel) | — | 🧩 Code | `useVersusDuel.ts`, per behavior id |
+| Balls | radius-based | 🧩 Code | pixel ball baked per size + color (2-unit pixels, shade crescent); pattern/image fills ⏳ |
+| In-frame HUD (name, HP bar, VS, status row) | 56 units tall | 🧩 Code | `drawHud`; part of recordings |
+| Winner / draw card | — | 🧩 Code | `drawWinner` |
+| Arena floor and wall | 32-unit tiles | 🧩 Code | two-tone checker floor + 4px ink wall stroke (`clear`) |
+| Navigation icons | 8×8 | 🧩 Code | inline SVG paths in `NavigationMenu.vue` |
+| Panel / button 9-slice | 24×24 / 96×24 strip | ⏳ Optional PNG | `useNineSlice` can load `ui/panel.png`, `ui/button.png`, but no component uses it yet; the UI is CSS (`.px-panel`, `.px-btn-*`) |
+| Roulette wheel | — | 🧩 Code | `RouletteWheel.vue`, slices carry weapon sprites |
+| Trait / Ability icons | 16×16 | ⏳ Planned | after the Trait & Ability design is settled |
+| Ball fill patterns | 16×16 or 32×32 | ⏳ Planned | optional, see below |
 
-### Icon style distinction (16×16)
+### Registered but unused
 
-Weapon icons and skill icons both appear 16×16 in roulette/library slots. Keep
-them visually distinct so users can tell them apart in one row:
+Kept in the manifest, referenced by nothing; candidates for removal:
 
-- **Weapon icon:** a full object silhouette (just the weapon).
-- **Skill icon:** a symbol inside a round badge / circular frame.
-
-> NOTE: Balls are NOT sprites. A ball is a circle-clipped fill (solid color /
-> pixel pattern / user image) handled by the renderer, so ball skins are fully
-> customizable. No ball PNG is needed. (Optional: pixel "pattern" fills listed
-> at the end are the only ball-related assets.)
+- `projectile:blaster-shot` — from the removed Blaster skill.
+- `fx:hit-contact` — melee hits use blood particles instead of a flash.
+- `icon:weapon:<id>` (generic procedural shapes, set as `iconId` on each weapon)
+  — the UI shows the cropped arena sprite instead.
 
 ## File Layout
 
 ```
 public/sprites/
-  weapons/   sword.png hammer.png spear.png orbiting-blade.png bow.png scythe.png
-  projectiles/ arrow.png blaster-shot.png
-  fx/        hit-contact.png hit-weapon.png hit-projectile.png
-  icons/
-    skills/  vampire.png spike.png blaster.png splitter.png grower.png
-    weapons/ sword.png hammer.png spear.png bow.png
-    status/  poison.png slow.png stun.png  (manifest id `status:<status id>`)
-    nav/     home.png versus.png roulette.png library.png recordings.png settings.png
-  ui/        button.png panel.png hpbar-frame.png hpbar-fill.png checkbox.png toggle.png winner-banner.png
-  roulette/  reel-bg.png spin-button.png landing-glow.png
-  arena/     floor-tile.png wall-border.png
-  patterns/  stripes.png checker.png dots.png   (optional ball fills)
+  weapons/        sword.png hammer.png spear.png bow.png scythe.png   ✅
+  icons/status/   poison.png slow.png stun.png                        ✅
+                  freeze.png frozen.png                               ⏳
+  icons/traits/   (Trait / Ability icons)                             ⏳
+  ui/             panel.png button.png                                ⏳ optional
+  patterns/       stripes.png checker.png dots.png                    ⏳ optional
 ```
 
-> Every entry has a procedural fallback drawn in code, so the game runs even
-> before any PNG exists. Dropping a PNG at the path above swaps it in with no
-> code change.
+Dropping a PNG at a manifest path swaps it in over its procedural fallback with
+no other code change.
 
 ---
 
 ## Hitbox Reference (for aligning weapon sprites)
 
-Weapon sprites must visually cover their logical hitbox (collision truth lives
-in the engine, not the sprite). Tune art to these:
+Collision truth lives in the engine (`engine/weapons/<id>.ts`), not the sprite.
+All weapons orbit their ball. Sizes are arena units; the sprite is scaled by
+`length / spriteReach` to match.
 
-| Weapon         | Mode  | Hitbox            | Pivot    | Art guidance                                  |
-| -------------- | ----- | ----------------- | -------- | --------------------------------------------- |
-| sword          | held  | segment 20×4      | (7, 16)  | blade spans ~20px of the 32px canvas, thin    |
-| hammer         | held  | circle r=10       | (5, 16)  | heavy head ~20px diameter near the tip        |
-| spear          | held  | segment 40×3      | (6, 6)   | very long thin shaft, fills the 48px length   |
-| orbiting-blade | orbit | circle r=6        | (16, 16) | compact blade ~12px, spins around owner       |
-| bow            | held  | segment 16×2      | (19, 16) | bow body ~16px; damage comes from its arrow   |
-| scythe         | orbit | circle r=14       | (5, 12)  | curved blade at the tip, curling back over the shaft; reach 25px |
+| Weapon | Length | Hitbox | Pivot | spriteReach | Scale | Art guidance |
+| ------ | ------ | ------ | ----- | ----------- | ----- | ------------ |
+| sword  | 48 | segment 48 × 10 | (7, 16)  | 25 | 1.92 | blade from the guard to the tip, thin |
+| hammer | 42 | circle r16 (head, at the tip) | (5, 16) | 26 | 1.62 | heavy head at the far end |
+| spear  | 72 | segment 72 × 8  | (6, 6)   | 42 | 1.71 | very long thin shaft, fills the 48px canvas |
+| bow    | 24 | segment 24 × 8  | (19, 16) | 10 | 2.40 | bow body; damage comes from its arrows |
+| scythe | 46 | circle r14 (blade, at the tip) | (5, 12) | 25 | 1.84 | curved blade at the tip, curling back over the shaft |
 
 ---
 
-## Generation Prompts
+## Specs
 
-Each prompt is written to feed a pixel-art generator or a human artist. Keep the
-Global Rules in mind for all of them.
+### Weapons ✅ (32×32; spear 48×12), transparent, forward = right
 
-### Weapons (arena, 32×32; spear 48×12), transparent, forward = right
+1. **sword.png** — steel blade with a simple crossguard and a wrapped grip, grip
+   on the left (pivot (7, 16)).
+2. **hammer.png** — large blocky metal head with a short wooden handle on the
+   left (pivot (5, 16)), heavy and chunky.
+3. **spear.png** — very long thin wooden shaft with a small steel tip, butt on
+   the left (pivot (6, 6)).
+4. **bow.png** — short bow, limbs bulge toward the right (+x, toward the
+   target), taut string on the left, grip at the pivot (19, 16).
+5. **scythe.png** — long wooden shaft with a purple grip wrap, a crescent steel
+   blade at the tip curling up and back, bright edge on the inner curve
+   (pivot (5, 12)).
 
-1. **sword.png** — "16-bit pixel-art sword, side view, blade pointing right,
-   steel blade with a simple crossguard and a wrapped grip, ~20px blade on a
-   32×32 transparent canvas, grip on the left (pivot (7, 16)), hard edges,
-   limited palette, no anti-aliasing."
-2. **hammer.png** — "16-bit pixel-art war hammer, side view, head pointing
-   right, large blocky metal head (~20px) with a short wooden handle on the left
-   (pivot (5, 16)), heavy and chunky, 32×32 transparent, hard edges, limited palette."
-3. **spear.png** — "16-bit pixel-art spear, horizontal, tip pointing right, very
-   long thin wooden shaft with a small steel tip, fills a 48×12 transparent
-   canvas, butt on the left (pivot (6, 6)), hard edges, limited palette."
-5. **bow.png** — "16-bit pixel-art short bow, side view, limbs bulge toward the
-   right (+x, toward the target), taut string on the left (archer side),
-   wooden limbs with a grip at the pivot (19, 16), ~16px tall on 32×32
-   transparent, hard edges, limited palette."
-5b. **scythe.png** (done, drawn in code) — "16-bit pixel-art scythe, side view,
-   long wooden shaft pointing right with a purple grip wrap, a crescent steel
-   blade at the tip curling up and back toward the handle, bright cutting edge
-   on the inner curve, 32×32 transparent (pivot (5, 12)), hard edges,
-   Endesga 32 palette."
-
-### Projectiles (8×8), transparent, forward = right
-
-6. **arrow.png** — "tiny 16-bit pixel arrow pointing right, 8×8 transparent,
-   wooden shaft with a steel tip and a hint of fletching, hard edges."
-7. **blaster-shot.png** — "tiny 16-bit pixel energy bolt, 8×8 transparent,
-   bright core with a short tail pointing right, hard edges."
-
-### Hit-flash FX (32×32), transparent, SHAPE-distinct per source
-
-8. **hit-contact.png** — "16-bit pixel impact burst, soft round starburst /
-   radial spark shape (circular motif), 32×32 transparent, hard edges."
-9. **hit-weapon.png** — "16-bit pixel slash mark, sharp diagonal slash / X
-   shape (linear motif), 32×32 transparent, hard edges."
-10. **hit-projectile.png** — "16-bit pixel pierce mark, small concentric
-    diamond / crosshair shape (angular motif), 32×32 transparent, hard edges."
-    > The three must be distinguishable by SHAPE alone (round vs slash vs
-    > diamond), independent of color.
-
-### Skill icons (16×16), transparent
-
-11. **vampire.png** — "16-bit pixel icon, a red droplet with small fangs,
-    16×16 transparent, bold readable silhouette."
-12. **spike.png** — "16-bit pixel icon, outward-pointing spikes / caltrop,
-    16×16 transparent, bold silhouette."
-13. **blaster.png** — "16-bit pixel icon, a small cannon muzzle firing a dot,
-    16×16 transparent."
-14. **splitter.png** — "16-bit pixel icon, one circle splitting into two,
-    16×16 transparent."
-15. **grower.png** — "16-bit pixel icon, a small circle with up-arrows showing
-    growth, 16×16 transparent."
+A new weapon needs: its PNG here, a `weapon:<id>` manifest entry (plus
+`weapon:<id>:proc` if wanted), and `spriteId`, `pivot`, `spriteReach` on its
+definition.
 
 ### Status icons (8×8), transparent — HUD, drawn at 2×
 
-Shape-distinct, 1px ink outline, full 8×8 (too small for a margin). Generated in
-code (Pillow, EDG32); procedural copies live in `assets/sprites/manifest.ts`.
+Shape-distinct, 1px ink outline, full 8×8 (too small for a margin). Drawn on
+the HP row of the in-frame HUD, mirrored toward VS, with a stack digit and a
+blink over the last half second. Procedural copies (same pixel maps) live in
+`assets/sprites/manifest.ts`.
 
-- **poison.png** — green droplet (`#63c74d`/`#3e8948`), white highlight. DoT.
-- **slow.png** — blue hourglass (`#0099db`/`#124e89`), sand run down. Modifier.
-- **stun.png** — yellow four-point star (`#fee761`/`#feae34`/`#f77622`). Control.
+- ✅ **poison.png** — green droplet (`#63c74d`/`#3e8948`), white highlight. DoT.
+- ✅ **slow.png** — blue hourglass (`#0099db`/`#124e89`), sand run down. Modifier.
+- ✅ **stun.png** — yellow four-point star with cut corners, so it doesn't read
+  as a "+" heal (`#fee761`/`#feae34`/`#f77622`). Control.
+- ⏳ **freeze.png** — cyan snowflake, shows a stack digit. Modifier (stacking).
+- ⏳ **frozen.png** — ice block. Control.
 
-### Weapon icons (16×16), transparent — simplified versions of the arena art
+A new status needs a `status:<status id>` manifest entry; without one the HUD
+draws the magenta placeholder.
 
-16. **icons/weapons/sword.png** … **bow.png** — "16-bit pixel inventory icon of
-    the [weapon], centered, bold readable silhouette, 16×16 transparent." (one
-    per weapon: sword, hammer, spear, orbiting-blade, bow)
+### Trait / Ability icons ⏳ (16×16), transparent
 
-### Navigation / UI icons (16×16), transparent
+To be designed once Trait & Ability are settled. Keep them distinct from weapon
+art in the same row: **a symbol inside a round badge** (weapon art is a bare
+silhouette).
 
-17. **nav icons** — home (house), versus (two crossed swords or "VS"), roulette
-    (slot/wheel), library (book/shelf), recordings (film reel / play), settings
-    (gear). "16-bit pixel UI icon of [concept], bold 1px-outline silhouette,
-    16×16 transparent."
-18. **checkbox.png / toggle.png** — "16-bit pixel checkbox as a 32×16 strip of
-    two 16×16 frames (unchecked, checked), and an on/off slider toggle as a
-    32×16 strip of two 16×16 frames (off, on); retro RPG UI, EDG32 palette,
-    transparent, no gutter between frames."
+### Panel / button 9-slice ⏳ optional (tile 8×8)
 
-### UI chrome (9-slice, tile 8×8 unless noted)
+Only worth making once something renders through `useNineSlice`; today the
+pages style panels and buttons with CSS.
 
-19. **button.png** — "16-bit pixel UI button as a 96×24 horizontal strip of four
-    24×24 frames in order: normal, hover, pressed, disabled; beveled retro look,
-    EDG32 palette, 8px 9-slice margins that tile cleanly, no gutter between
-    frames."
-20. **panel.png** — "16-bit pixel RPG window/panel border, 24×24, a 3×3 grid of
-    8×8 tiles (8px 9-slice margins), ornate but clean corners, solid or subtly
-    textured center, EDG32 palette."
-21. **hpbar-frame.png / hpbar-fill.png** — "16-bit pixel HP bar: `hpbar-frame`
-    is a 64×12 empty frame; `hpbar-fill` is a 1×8 one-pixel-wide tileable fill
-    bar (so it can be stretched/clipped to a fraction inside the frame), EDG32
-    palette, retro."
-22. **winner-banner.png** — "16-bit pixel victory banner/ribbon suitable to
-    overlay the word WINNER (and a DRAW variant), transparent, bold retro."
+- **button.png** — 96×24 horizontal strip of four 24×24 frames in order:
+  normal, hover, pressed, disabled; beveled retro look, 8px 9-slice margins
+  that tile cleanly, no gutter between frames.
+- **panel.png** — 24×24 RPG window border, a 3×3 grid of 8×8 tiles (8px
+  margins), clean corners, solid or subtly textured center.
 
-### Roulette (pixel reel)
+### Ball fill patterns ⏳ optional (16×16 or 32×32, tileable)
 
-23. **reel-bg.png** — "16-bit pixel slot-machine reel background strip, vertical
-    or horizontal, tileable, subtle shading, slots sized to hold a 16×16 icon."
-24. **spin-button.png** — "16-bit pixel SPIN button as a horizontal strip of two
-    equal frames (idle, pressed), chunky arcade/RPG style, EDG32 palette,
-    transparent, no gutter between frames."
-25. **landing-glow.png** — "16-bit pixel highlight/glow frame to mark the
-    selected slot when the reel lands, transparent overlay, bold border."
-
-### Arena
-
-26. **floor-tile.png** — "16-bit pixel arena floor tile, 32×32, seamless/
-    tileable, subtle dungeon or stone pattern, limited palette." (no alpha)
-27. **wall-border.png** — "16-bit pixel arena wall/border, 9-slice, tiles at
-    16×16, reads as a solid boundary." (no alpha on solid parts)
-
-### Optional ball fill patterns (16×16 or 32×32, tileable)
-
-29. **stripes.png / checker.png / dots.png** — "16-bit pixel seamless pattern
-    (diagonal stripes / checkerboard / polka dots), tileable, two-tone, used as
-    a ball fill clipped to a circle." (These are the ONLY ball-related assets;
-    solid-color and user-image fills need no asset.)
+- **stripes.png / checker.png / dots.png** — seamless two-tone pattern
+  (diagonal stripes / checkerboard / polka dots), used as a ball fill clipped to
+  a circle. The ball config already allows `{ type: 'pattern' }`; the renderer
+  still draws only solid colors.
 
 ---
 
 ## Delivery / Hand-off Checklist
 
-- [ ] All PNGs transparent (except floor/wall solids), native pixel grid, no
-      scaling baked in.
+- [ ] PNG transparent, native pixel grid, no scaling baked in.
 - [ ] Every pixel uses an EDG32 color; backgrounds are true alpha transparency.
-- [ ] Multi-frame assets are flush horizontal strips (no gutter) at the stated
-      dimensions.
-- [ ] Weapon sprites visually cover their hitbox (see Hitbox Reference); verify
-      with the in-app `showHitboxes` debug overlay.
-- [ ] Hit-flash variants distinguishable by shape alone.
-- [ ] Files placed under `public/sprites/...` matching the File Layout so they
-      swap in over the procedural fallbacks with no code change.
+- [ ] Multi-frame assets are flush horizontal strips (no gutter).
+- [ ] Viewed upscaled before hand-off (silhouette, readability at 1×, contrast).
+- [ ] Weapon sprites cover their hitbox; verified with *Show hitboxes*.
+- [ ] Variants distinguishable by shape alone.
+- [ ] File at its manifest path under `public/sprites/`, entry added to
+      `assets/sprites/manifest.ts`.
