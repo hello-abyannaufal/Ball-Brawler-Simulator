@@ -269,10 +269,13 @@ function startAutoRecord(): void {
   recorder.start()
 }
 
-// Stop recording 3s after a winner is determined (time to read the result card), then save.
+/** Recording keeps running this long after a winner is determined (time to
+ *  read the result card), then stops and saves. */
+const RECORDING_TAIL_MS = 5000
+
 watch(winner, (w) => {
   if (w === undefined || !recorder || !autoRecording.value) return
-  window.setTimeout(() => void finishRecording(), 3000)
+  window.setTimeout(() => void finishRecording(), RECORDING_TAIL_MS)
 })
 
 async function finishRecording(): Promise<void> {
