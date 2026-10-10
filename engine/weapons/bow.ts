@@ -24,6 +24,7 @@ export const bow: WeaponDefinition = {
   spriteId: 'weapon:bow',
   pivot: { x: 19, y: 16 },
   spriteReach: 10,
+  projectileSprite: { id: 'projectile:arrow', pivot: { x: 11.5, y: 2.5 } }, // pivot on the tip
 }
 
 weaponRegistry.register(bow)

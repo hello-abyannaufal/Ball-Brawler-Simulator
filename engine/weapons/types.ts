@@ -24,6 +24,9 @@ export interface WeaponDefinition {
   readonly spriteId?: string // arena sprite id
   readonly pivot?: { x: number; y: number } // sprite-pixel rotation point
   readonly spriteReach?: number // sprite pixels from pivot to tip; renderer scale = length / spriteReach
+  /** Sprite of the projectiles this weapon fires, drawn at 2× pointing along
+   *  the flight; `pivot` (sprite pixels) sits on the projectile's hit circle. */
+  readonly projectileSprite?: { id: string; pivot: { x: number; y: number } }
 }
 
 /** A weapon carried by a ball, resolved from a WeaponRef against the registry. */

@@ -4,6 +4,7 @@ import type { EngineEvent } from '~/engine/events'
 import type { Ball, Entity, EntityId, Projectile, WeaponEntity } from '~/engine/entities'
 import { createEngine, TIMESTEP, type Engine } from '~/engine/engine'
 import { activeBehaviorId, hasBehavior } from '~/engine/weapons/behavior'
+import { weaponRegistry } from '~/engine/weapons/registry'
 import { useSprites } from '~/composables/useSprites'
 import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
 import {
@@ -651,10 +652,12 @@ export function useVersusDuel(
   }
 
   function drawProjectile(ctx: CanvasRenderingContext2D, p: Projectile): void {
-    // Point along the flight direction; pivot on the tip, where the engine's
-    // hit circle is, so what you see is what hits.
+    // The firing weapon's projectile sprite, pointing along the flight; its
+    // pivot sits on the engine's hit circle, so what you see is what hits.
+    const sprite = weaponRegistry.get(p.weaponId)?.projectileSprite
+    if (!sprite) return
     const angle = Math.atan2(p.velocity.y, p.velocity.x)
-    drawSprite(ctx, 'projectile:arrow', p.position.x, p.position.y, 2, angle, { x: 11.5, y: 2.5 })
+    drawSprite(ctx, sprite.id, p.position.x, p.position.y, 2, angle, sprite.pivot)
   }
 
   function drawHpBars(ctx: CanvasRenderingContext2D): void {
