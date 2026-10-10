@@ -129,6 +129,14 @@ export function launchAway(striker: Ball, struck: Ball, speed: number): void {
   struck.velocity.y = (dy / dist) * speed
 }
 
+/** Add an impulse of `magnitude` to `ball` along the direction (dx, dy). */
+export function pushAlong(ball: Ball, dx: number, dy: number, magnitude: number): void {
+  const len = Math.sqrt(dx * dx + dy * dy)
+  if (len === 0) return
+  ball.velocity.x += (dx / len) * magnitude
+  ball.velocity.y += (dy / len) * magnitude
+}
+
 /**
  * Apply a knockback impulse to `struck`, directed along the line from the
  * striker's center to the struck ball's center (Req 8.6).

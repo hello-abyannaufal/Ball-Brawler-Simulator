@@ -24,7 +24,7 @@ function setup() {
     const p: Projectile = {
       id: e.world.allocateId(), kind: 'projectile', alive: true,
       position: { x, y: 300 }, velocity: { x: vx, y: 0 },
-      radius: 4, damage: 7, ownerId, blockable: true, weaponId: 'bow',
+      radius: 4, damage: 7, ownerId, blockable: true, weaponId: 'bow', knockback: 0,
     }
     e.world.add(p)
     return p
@@ -61,4 +61,5 @@ describe('projectile vs projectile', () => {
     expect(p.alive).toBe(true)
     expect(q.alive).toBe(true)
   })
+
 })

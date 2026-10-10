@@ -10,6 +10,8 @@ export interface ProjectileSettings {
   facingDegrees?: number
   /** Opposing bladed weapons can swat these projectiles out of the air. */
   blockable?: boolean
+  /** Impulse pushed into the struck ball along the projectile's flight. */
+  knockback?: number
   /** `size` shots, then `reloadSteps` before the magazine is full again.
    *  Without it the weapon never runs dry. */
   magazine?: { size: number; reloadSteps: number }
@@ -98,6 +100,7 @@ export function shooter(config: ProjectileSettings): WeaponBehavior<ShooterState
         ownerId: owner.id,
         blockable: !!config.blockable,
         weaponId: weapon.def.id,
+        knockback: config.knockback ?? 0,
       })
     },
     projectileResponse: () => 'pass',

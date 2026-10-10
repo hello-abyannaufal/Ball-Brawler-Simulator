@@ -6,7 +6,7 @@ import { initBehaviorState, type BehaviorContext, type HitResponse, type WeaponB
 import { World } from './world'
 import { createRng } from './rng'
 import { applyDamage } from './damage'
-import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback, launchAway } from './physics'
+import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback, launchAway, pushAlong } from './physics'
 import { runStatusEffects, recomputeStats, hasControl } from './status'
 import { CooldownTable } from './cooldown'
 import { weaponRegistry } from './weapons/registry'
@@ -466,6 +466,7 @@ export function createEngine(opts: EngineOptions): Engine {
           targetId: ball.id,
           amount: p.damage,
         })
+        if (p.knockback > 0 && ball.alive) pushAlong(ball, p.velocity.x, p.velocity.y, p.knockback)
         break
       }
     }

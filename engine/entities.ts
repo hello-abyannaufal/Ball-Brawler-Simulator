@@ -42,6 +42,7 @@ export interface Projectile extends BaseEntity {
   ownerId: EntityId // credited attacker
   blockable: boolean // can be swatted out of the air by an opposing weapon
   weaponId: string // definition id of the weapon that made it (renderer picks the sprite)
+  knockback: number // impulse pushed into the struck ball along the flight; 0 = none
 }
 
 export interface WeaponEntity extends BaseEntity {
