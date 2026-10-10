@@ -29,8 +29,8 @@ export interface Ball extends BaseEntity {
   cruiseSpeed: number // speed the ball eases back to after knockback
   damageTaken: number // × every incoming damage amount (race)
   weaponSpin: number // × the spin speed of every carried weapon (race)
-  /** Pending wall-slam from a heavy hit (e.g. Hammer); null when none. */
-  slam: { attackerId: EntityId; damage: number; steps: number } | null
+  /** Pending wall-slam from a heavy hit (Hammer, Spear thrust); null when none. */
+  slam: { attackerId: EntityId; damage: number; steps: number; statusId?: string } | null
   weapons: WeaponInstance[]
   statusEffects: StatusInstance[]
 }

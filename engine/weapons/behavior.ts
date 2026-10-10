@@ -26,8 +26,9 @@ export interface BehaviorContext {
 export interface HitResponse {
   cooldownSteps: number // starts at the weapon's full hit cooldown
   knockback: 'push' | 'none' | { launchSpeed: number } // push: the base knockback impulse
-  /** If the struck ball hits a wall within `windowSteps`, it takes `damage` once more. */
-  wallSlam?: { damage: number; windowSteps: number }
+  /** If the struck ball hits a wall within `windowSteps`, it takes `damage`
+   *  once more and gets `statusId`, if any. */
+  wallSlam?: { damage: number; windowSteps: number; statusId?: string }
 }
 
 /**
@@ -54,6 +55,11 @@ export interface WeaponBehavior<S = unknown> {
   projectileResponse?(state: S): 'reflect' | 'pass' | undefined
   /** Render-only: a burst is running (the renderer draws a trail). */
   active?(state: S): boolean
+  /** Render-only: arena px the weapon is drawn pushed out along its axis. */
+  lunge?(state: S): number
+  /** Render-only: a hit on `target` from the weapon's current pose lands heavy
+   *  (the renderer holds the hit-stop longer). */
+  heavyHit?(weapon: WeaponEntity, target: Ball): boolean
 }
 
 /** Fresh runtime state for each of a definition's behaviors. */
@@ -66,9 +72,14 @@ export function activeBehaviorId(w: WeaponEntity): string | undefined {
   return w.def.behaviors?.find((b, i) => b.active?.(w.behaviorState[i]))?.id
 }
 
-/** Does the definition use a behavior with this id? */
-export function hasBehavior(w: WeaponEntity, id: string): boolean {
-  return !!w.def.behaviors?.some((b) => b.id === id)
+/** Arena px the weapon is drawn pushed out along its axis (render-only). */
+export function weaponLunge(w: WeaponEntity): number {
+  return w.def.behaviors?.reduce((sum, b, i) => sum + (b.lunge?.(w.behaviorState[i]) ?? 0), 0) ?? 0
+}
+
+/** Does a hit on `target` from `w`'s current pose land heavy (render-only)? */
+export function landsHeavy(w: WeaponEntity, target: Ball): boolean {
+  return !!w.def.behaviors?.some((b) => b.heavyHit?.(w, target))
 }
 
 /** Reject a behavior config value with a readable message. */

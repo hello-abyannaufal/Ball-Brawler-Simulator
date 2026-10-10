@@ -7,7 +7,7 @@ import { World } from './world'
 import { createRng } from './rng'
 import { applyDamage } from './damage'
 import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback, launchAway, pushAlong } from './physics'
-import { runStatusEffects, recomputeStats, hasControl } from './status'
+import { runStatusEffects, recomputeStats, hasControl, applyStatus } from './status'
 import { CooldownTable } from './cooldown'
 import { weaponRegistry } from './weapons/registry'
 import { ballStats } from './races/registry'
@@ -18,7 +18,7 @@ import {
   weaponTouchesPath,
 } from './weapons/combat'
 
-export const engineVersion = '1.6.0' // non-empty string (Req 5.8)
+export const engineVersion = '1.7.0' // non-empty string (Req 5.8)
 export const TIMESTEP = 1 / 60 // seconds (Req 5.4)
 
 /** Knockback impulse magnitude applied on a weapon hit. */
@@ -336,7 +336,7 @@ export function createEngine(opts: EngineOptions): Engine {
         // Keyed by the weapon so each weapon has its own hitCooldown.
         if (cooldowns.isActive(w.id, ball.id)) continue
 
-        // Boosted hits (Spear tip strike, Sword riposte): multipliers stack.
+        // Boosted hits (Sword riposte): multipliers stack.
         let mult = 1
         eachBehavior(w, (b, s) => {
           if (b.hitMultiplier) mult *= b.hitMultiplier(ctx, s, ball)
@@ -351,14 +351,15 @@ export function createEngine(opts: EngineOptions): Engine {
         })
         if (outcome.kind === 'applied') {
           // Behaviors shape the follow-up (reap: rapid re-hits, no push;
-          // heavy blow: launch + wall slam), then the engine applies it.
+          // heavy blow, thrust: launch + wall slam), then the engine applies it.
           const hit: HitResponse = { cooldownSteps: ctx.fullCooldownSteps, knockback: 'push' }
           eachBehavior(w, (b, s) => b.afterHit?.(ctx, s, ball, hit))
           cooldowns.start(w.id, ball.id, hit.cooldownSteps)
           if (hit.knockback === 'push') applyKnockback(owner, ball, HIT_KNOCKBACK)
           else if (hit.knockback !== 'none') launchAway(owner, ball, hit.knockback.launchSpeed)
           if (hit.wallSlam && ball.alive) {
-            ball.slam = { attackerId: owner.id, damage: hit.wallSlam.damage, steps: hit.wallSlam.windowSteps }
+            const { damage, windowSteps, statusId } = hit.wallSlam
+            ball.slam = { attackerId: owner.id, damage, steps: windowSteps, ...(statusId ? { statusId } : {}) }
           }
         }
       }
@@ -383,6 +384,7 @@ export function createEngine(opts: EngineOptions): Engine {
         targetId: ball.id,
         amount: slam.damage,
       })
+      if (slam.statusId && ball.alive) applyStatus(world, ball.id, slam.statusId, slam.attackerId)
     }
   }
 

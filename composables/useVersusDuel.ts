@@ -3,7 +3,7 @@ import type { DuelConfig } from '~/engine/config'
 import type { EngineEvent } from '~/engine/events'
 import type { Ball, Entity, EntityId, Projectile, WeaponEntity } from '~/engine/entities'
 import { createEngine, TIMESTEP, type Engine } from '~/engine/engine'
-import { activeBehaviorId, hasBehavior } from '~/engine/weapons/behavior'
+import { activeBehaviorId, landsHeavy, weaponLunge } from '~/engine/weapons/behavior'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { useSprites } from '~/composables/useSprites'
 import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
@@ -238,9 +238,9 @@ export function useVersusDuel(
           const crit = e.style === 'critical'
           if (sprite && at) hitFlashes.push({ ...at, life: HIT_FLASH, spriteId: sprite, scale: crit ? 2 : 1 })
           if (reduced) return // decorative motion off; flash above still shows
-          // Heavy contact (Hammer) freezes longest; slams and criticals
-          // (riposte, spear tip) land harder than a plain hit.
-          const heavy = !slam && e.source.tag === 'weapon' && isHeavyAttacker(e.attackerId)
+          // Heavy contact (Hammer, Spear thrust) freezes longest; slams and
+          // criticals (riposte) land harder than a plain hit.
+          const heavy = !slam && e.source.tag === 'weapon' && isHeavyHit(e.attackerId, e.targetId)
           hitStop = heavy ? HEAVY_HIT_STOP : slam || crit ? HIT_STOP * 1.5 : HIT_STOP
           spawnBlood(e.targetId, e.attackerId, crit ? e.amount * 2 : e.amount, slam ?? undefined)
         } else if (e.type === 'projectileBlocked' || e.type === 'projectilesCollided') {
@@ -265,10 +265,12 @@ export function useVersusDuel(
     syncHp()
   }
 
-  /** Does the attacker wield a heavy (wall-slamming) weapon? */
-  function isHeavyAttacker(attackerId: EntityId | ''): boolean {
-    return !!engine?.world.entities.some(
-      (w) => w.kind === 'weapon' && w.alive && w.ownerId === attackerId && hasBehavior(w, 'heavy-blow'),
+  /** Does the attacker's weapon land this hit heavy (Hammer, Spear thrust)?
+   *  Asked while the hit is applied, so the pose is the one that hit. */
+  function isHeavyHit(attackerId: EntityId | '', targetId: EntityId): boolean {
+    const target = engine?.world.ballById(targetId)
+    return !!target && !!engine?.world.entities.some(
+      (w) => w.kind === 'weapon' && w.alive && w.ownerId === attackerId && landsHeavy(w, target),
     )
   }
 
@@ -657,7 +659,11 @@ export function useVersusDuel(
     const burst = activeBehaviorId(w)
     const trail = burst && TRAIL_COLORS[burst]
     if (trail) drawRiposteTrail(ctx, w, anchor, trail)
-    drawSprite(ctx, spriteId, anchor.x, anchor.y, scale, w.angle, w.def.pivot)
+    // Spear thrust: drawn pushed out along its axis, away from the owner.
+    const lunge = weaponLunge(w)
+    const x = anchor.x + Math.cos(w.angle) * lunge
+    const y = anchor.y + Math.sin(w.angle) * lunge
+    drawSprite(ctx, spriteId, x, y, scale, w.angle, w.def.pivot)
   }
 
   /** Anchor the grip at the ball surface along the weapon angle, so the

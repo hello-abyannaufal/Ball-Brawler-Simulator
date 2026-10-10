@@ -120,7 +120,14 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
   yang terkena menabrak dinding dalam 45 step (0.75 s) → +6 damage.
   Visual (renderer saja): hit-stop lebih lama saat kontak (0.2 s), dan wall slam memunculkan
   shockwave abu-abu dari titik kontak dinding yang melebar sambil menipis sampai hilang.
-- **Spear — Tip strike** (`tipStrike`): hit di **20% ujung** tombak → damage **×2**.
+- **Spear — Thrust** (`thrust`): hit di **20% ujung** tombak menyodok lawan lurus menjauh
+  (`launchSpeed: 480`) dan tombak **berhenti berputar 20 step** (0.33 s), seolah mendorong.
+  Jika lawan menabrak dinding dalam 45 step (0.75 s) → **+7 damage dan stun** (tertancap).
+  Aktif di setiap hit ujung; jaraknya hanya diatur hit cooldown biasa (600 ms). Hit di batang
+  tombak = push biasa.
+  Visual (renderer saja, hook `lunge`): tombak menyodok keluar 18 px searah porosnya (ujungnya
+  menancap ke bola saat kontak), ditahan, lalu ditarik kembali di 8 step terakhir; hit-stop
+  panjang (0.2 s) seperti Hammer (hook `heavyHit`). Hitbox engine tidak ikut memanjang.
 - **Bow — Shooter** (`shooter`): menembak panah (speed 320, radius 4, damage 7) tiap 100 step,
   hanya jika mengarah ±5° ke lawan; arah dibidik dengan *lead* ke posisi lawan berikutnya.
   `blockable`: panah bisa ditepis weapon melee lawan. `blocksProjectiles`: badan bow dari
@@ -159,6 +166,9 @@ Win rate per weapon, pooled atas semua race (engine 1.6.0,
 `npm run sim -- --axes weapon,race --runs 40 --seed 777`): Hammer 57%, Sword 52%, Scythe 51%,
 Bow 49%, Revolver 48%, Spear 41%. **Matchup individual masih timpang** (race Human,
 `--runs 100`): Sword 81% vs Spear, Revolver 74% vs Spear tapi 40% vs Bow, Hammer 68% vs Sword.
+Engine 1.7.0 (Bow metal menahan proyektil, Spear Thrust; weapon saja, `--runs 100 --seed 7`):
+Bow 56%, Hammer 52%, Spear 50% (naik dari 36% dengan tip ×2), Sword 48%, Scythe 47%,
+Revolver 44%. Matchup Spear 43–56%; Bow vs Revolver 72% (timpang sejak Bow metal).
 Perubahan kecil bisa membalik seluruh matchup — ukur ulang setelah tiap perubahan stat.
 
 ### 3.5 Menambah weapon
@@ -170,7 +180,7 @@ Perubahan kecil bisa membalik seluruh matchup — ukur ulang setelah tiap peruba
 4. Otomatis muncul di roda Roulette. Bump `engineVersion`.
 
 Mekanik khusus dipasang lewat `behaviors` (komposisi), dipilih dari `engine/weapons/behaviors/`:
-`riposte`, `reap`, `tipStrike`, `heavyBlow`, `shooter`. Mekanik baru = file behavior baru yang
+`riposte`, `reap`, `thrust`, `heavyBlow`, `shooter`. Mekanik baru = file behavior baru yang
 mengimplementasikan hook di `engine/weapons/behavior.ts` (`spinMultiplier`, `onStep`, `onClash`,
 `hitMultiplier`, `afterHit`, `projectileResponse`); engine tidak perlu diubah.
 

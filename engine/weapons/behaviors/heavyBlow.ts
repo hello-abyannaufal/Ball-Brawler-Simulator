@@ -19,5 +19,6 @@ export function heavyBlow(config: HeavyBlowConfig): WeaponBehavior<null> {
       if (config.reboundOnHit) weapon.angularSpeed = -weapon.angularSpeed
       if (config.wallSlam) hit.wallSlam = { ...config.wallSlam }
     },
+    heavyHit: () => true,
   }
 }
