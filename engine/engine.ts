@@ -15,7 +15,7 @@ import {
   weaponHitsBall,
   weaponsOverlap,
   resolveClash,
-  weaponTouchesCircle,
+  weaponTouchesPath,
 } from './weapons/combat'
 
 export const engineVersion = '1.5.0' // non-empty string (Req 5.8)
@@ -427,11 +427,14 @@ export function createEngine(opts: EngineOptions): Engine {
       // Swatted: an opposing weapon touching it destroys it, or reflects it
       // (riposte); some let it pass (a Bow can't swat an arrow).
       if (p.blockable) {
+        // Swept over the last step, so fast shots can't slip through a blade.
+        const x0 = p.position.x - p.velocity.x * TIMESTEP
+        const y0 = p.position.y - p.velocity.y * TIMESTEP
         const blocker = weapons.find(
           (w) =>
             w.ownerId !== p.ownerId
             && projectileResponse(w) !== 'pass'
-            && weaponTouchesCircle(w, p.position.x, p.position.y, p.radius),
+            && weaponTouchesPath(w, x0, y0, p.position.x, p.position.y, p.radius),
         )
         if (blocker) {
           if (projectileResponse(blocker) === 'reflect') reflect(p, blocker)

@@ -82,10 +82,18 @@ export function bladeHitFraction(w: WeaponEntity, ball: Ball): number {
   return Math.max(0, Math.min(1, (along + half) / w.hitbox.length))
 }
 
-/** True if a weapon's hitbox touches a circle (e.g. a projectile). */
-export function weaponTouchesCircle(w: WeaponEntity, x: number, y: number, r: number): boolean {
-  const { distSq, pad } = distToHitbox(w, x, y)
-  const sum = pad + r
+/**
+ * True if a circle of radius `r` moving from (x0, y0) to (x1, y1) touched the
+ * weapon's hitbox anywhere along the way (swept, so a fast projectile can't
+ * skip over a thin blade between steps). The weapon is taken at its current pose.
+ */
+export function weaponTouchesPath(w: WeaponEntity, x0: number, y0: number, x1: number, y1: number, r: number): boolean {
+  const path: Segment = { ax: x0, ay: y0, bx: x1, by: y1 }
+  const h = w.hitbox
+  const sum = r + (h.shape === 'circle' ? h.radius : h.thickness / 2)
+  const distSq = h.shape === 'circle'
+    ? pointSegDistSq(w.position.x, w.position.y, path)
+    : segSegDistSq(path, bladeSegment(w, h.length))
   return distSq <= sum * sum
 }
 
