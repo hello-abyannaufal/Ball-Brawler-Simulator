@@ -2,7 +2,7 @@
 # Host/port are configurable via the matching variables in .env / .env.example.
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:17-alpine
     container_name: ballbrawler-postgres
     restart: unless-stopped
     environment:
