@@ -16,6 +16,9 @@ logs
 .env.*
 !.env.example
 
+# Balance simulation output
+sim-results
+
 # Misc
 .DS_Store
 .vscode

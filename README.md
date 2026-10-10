@@ -78,6 +78,7 @@ Runs both engine (Node env, no DOM) and app (happy-dom) test suites via Vitest.
 | `npm run db:generate` | Generate Drizzle migrations  |
 | `npm run db:migrate`  | Apply pending DB migrations  |
 | `npm run user:create -- <username> <password>` | Create a login account |
+| `npm run sim -- [--axes weapon,race] [--runs 200]` | Balance simulation: win rates per weapon/race (`--help` for options) |
 
 ## Architecture
 

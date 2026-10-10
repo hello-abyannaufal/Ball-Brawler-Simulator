@@ -15,7 +15,8 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx --env-file-if-exists=.env server/db/migrate.ts",
-    "user:create": "tsx --env-file-if-exists=.env server/db/create-user.ts"
+    "user:create": "tsx --env-file-if-exists=.env server/db/create-user.ts",
+    "sim": "tsx sim/cli.ts"
   },
   "dependencies": {
     "@adonisjs/hash": "^9.1.1",
