@@ -82,10 +82,18 @@ export function bladeHitFraction(w: WeaponEntity, ball: Ball): number {
   return Math.max(0, Math.min(1, (along + half) / w.hitbox.length))
 }
 
-/** True if a weapon's hitbox touches a circle (e.g. a projectile). */
-export function weaponTouchesCircle(w: WeaponEntity, x: number, y: number, r: number): boolean {
-  const { distSq, pad } = distToHitbox(w, x, y)
-  const sum = pad + r
+/**
+ * True if a circle of radius `r` moving from (x0, y0) to (x1, y1) touched the
+ * weapon's hitbox anywhere along the way (swept, so a fast projectile can't
+ * skip over a thin blade between steps). The weapon is taken at its current pose.
+ */
+export function weaponTouchesPath(w: WeaponEntity, x0: number, y0: number, x1: number, y1: number, r: number): boolean {
+  const path: Segment = { ax: x0, ay: y0, bx: x1, by: y1 }
+  const h = w.hitbox
+  const sum = r + (h.shape === 'circle' ? h.radius : h.thickness / 2)
+  const distSq = h.shape === 'circle'
+    ? pointSegDistSq(w.position.x, w.position.y, path)
+    : segSegDistSq(path, bladeSegment(w, h.length))
   return distSq <= sum * sum
 }
 
@@ -118,7 +126,6 @@ export const MAX_DISARM_CHANCE = 0.6
  * The heavier weapon is favored (disarm chance = its weight share, capped at
  * MAX_DISARM_CHANCE): it tends to disarm the lighter one, the
  * lighter one tends to be bounced, and a parry occurs on a near-even match.
- * A weapon flagged `cannotBeParried` (Hammer) never yields a `parry`.
  */
 export function resolveClash(
   a: WeaponEntity,
@@ -133,11 +140,9 @@ export function resolveClash(
   const roll = rng.next()
   const heavierShare = Math.max(wa, wb) / total
 
-  const parryForbidden = a.def.cannotBeParried || b.def.cannotBeParried
-
-  // Near-even weights (small gap) favor a parry, unless forbidden.
+  // Near-even weights (small gap) favor a parry.
   const gap = Math.abs(wa - wb) / total
-  if (!parryForbidden && gap < 0.1) {
+  if (gap < 0.1) {
     return 'parry'
   }
 

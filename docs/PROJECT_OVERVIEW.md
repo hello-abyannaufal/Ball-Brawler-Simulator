@@ -78,11 +78,19 @@ diresolusi engine lewat `ballStats()` seperti weapon). Bola lama tanpa race mema
 | Human | 100 | 32 | ×1.00 | ×1.00 | ×1.00 |
 | Elf | 85 | 28 | ×1.20 | ×1.00 | ×1.15 |
 | Orc | 115 | 36 | ×0.85 | ×1.00 | ×0.85 |
+| Dwarf | 88 | 28 | ×0.90 | ×0.90 | ×1.00 |
+| Goblin | 88 | 24 | ×1.30 | ×1.00 | ×1.05 |
+| Giant | 130 | 44 | ×0.70 | ×1.00 | ×0.80 |
 
 - `speed` mengalikan kecepatan awal & `cruiseSpeed`; `damageTaken` mengalikan setiap damage
-  yang masuk (di `applyDamage`); `weaponSpin` mengalikan putaran semua weapon (termasuk ring
-  Shuriken dan sapuan bidik Bow, tapi bukan interval summon/tembak).
-- Tier 2 (Dwarf, Goblin, Giant) menyusul setelah Tier 1 stabil.
+  yang masuk (di `applyDamage`); `weaponSpin` mengalikan putaran semua weapon (termasuk sapuan
+  bidik Bow, tapi bukan interval tembak).
+- Tier 2 (Dwarf, Goblin, Giant) ditambahkan di engine 1.8.0. Yang menentukan menang adalah
+  **HP efektif** (`maxHp / damageTaken`); radius kecil hanya sedikit membantu. Versi awal
+  Dwarf (HP efektif 124) menang 71%, Goblin (64) 24.5%.
+- Win rate per race (engine 1.8.0, `--axes weapon,race --runs 20 --seed 777`): Dwarf 51.4%,
+  Goblin 50.9%, Orc 49.4%, Human 49.3%, Giant 48.9%, Elf 48.6%. Per weapon masih timpang
+  (mis. Revolver 31.6% di Goblin, 48.3% di Dwarf).
 
 | Atribut lain | Nilai |
 |---|---|
@@ -107,52 +115,68 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 | **Hammer** | 42 | 10 | 2.4 | 30 | 1100 | circle r16 (kepala) |
 | **Spear** | 72 | 6 | 3.0 | 8 | 600 | segment 72 × 8 |
 | **Bow** | 24 | 0 (lewat panah) | 2.8 | 5 | 400 | segment 24 × 8 |
-| **Shuriken** | 1 (tanpa bilah) | 0 (lewat shuriken) | 3.0 | 6 | 0 | circle r0.5 (dummy) |
 | **Scythe** | 46 | 6 | 3.6 | 15 | 800 | circle r14 (bilah) |
+| **Revolver** | 30 | 0 (lewat peluru) | 3.0 | 7 | 400 | segment 30 × 8 |
 
 ### 3.2 Skill unik per weapon
 
-- **Sword — Riposte** (`riposte`): setiap clash di mana sword *tidak* ter-disarm, atau saat
-  memecahkan shuriken lawan yang sedang mengorbit, riposte siap selama **60 step (1 s)**:
+- **Sword — Riposte** (`riposte`): setiap clash di mana sword *tidak* ter-disarm, riposte siap selama **60 step (1 s)**:
   hit berikutnya **×2**, bilah berputar **2.5×** lebih cepat menghadap lawan, dan proyektil
   lawan yang disentuh **dipantulkan** balik ke penembaknya.
-- **Hammer — Heavy blow** : `cannotBeParried`; hit melempar bola lawan dengan
+- **Hammer — Heavy blow** (`heavyBlow`): terberat (30), jadi tidak pernah di-parry weapon lain; hit melempar bola lawan dengan
   `launchSpeed: 540`; `reboundOnHit` (spin berbalik setelah kena); **Wall slam**: jika bola
   yang terkena menabrak dinding dalam 45 step (0.75 s) → +6 damage.
   Visual (renderer saja): hit-stop lebih lama saat kontak (0.2 s), dan wall slam memunculkan
   shockwave abu-abu dari titik kontak dinding yang melebar sambil menipis sampai hilang.
-- **Spear — Tip strike** (`tipStrike`): hit di **20% ujung** tombak → damage **×2**.
-- **Bow — Projectile**: menembak panah (speed 320, radius 4, damage 7) tiap 100 step,
+- **Spear — Thrust** (`thrust`): hit di **20% ujung** tombak menyodok lawan lurus menjauh
+  (`launchSpeed: 480`) dan tombak **berhenti berputar 20 step** (0.33 s), seolah mendorong.
+  Jika lawan menabrak dinding dalam 45 step (0.75 s) → **+7 damage dan stun** (tertancap).
+  Aktif di setiap hit ujung; jaraknya hanya diatur hit cooldown biasa (600 ms). Hit di batang
+  tombak = push biasa.
+  Visual (renderer saja, hook `lunge`): tombak menyodok keluar 18 px searah porosnya (ujungnya
+  menancap ke bola saat kontak), ditahan, lalu ditarik kembali di 8 step terakhir; hit-stop
+  panjang (0.2 s) seperti Hammer (hook `heavyHit`). Hitbox engine tidak ikut memanjang.
+- **Bow — Shooter** (`shooter`): menembak panah (speed 320, radius 4, damage 7) tiap 100 step,
   hanya jika mengarah ±5° ke lawan; arah dibidik dengan *lead* ke posisi lawan berikutnya.
-  `projectileBlockable`: panah bisa ditepis weapon melee lawan.
-- **Shuriken — Summoner** (`summon`): tiap 72 step (1.2 s) menambah 1 shuriken yang mengorbit
-  (radius 12, jarak 18 dari permukaan bola, slot tetap 72°), maks **5**. Shuriken orbit:
-  3 damage lalu pecah saat menyentuh bola lawan; pecah bila disentuh weapon lawan; menahan
-  proyektil lawan. Saat 5 terkumpul → dilempar kipas 45° ke lawan (speed 300, 4 damage tiap
-  shuriken, sekali hit), memantul di dinding selama 120 step (2 s).
+  `blockable`: panah bisa ditepis weapon melee lawan. `blocksProjectiles`: badan bow dari
+  **metal**, jadi menahan panah & peluru lawan (Revolver tidak, proyektil menembusnya).
 - **Scythe — Reap** (`reap`): hit memulai reap selama **60 step (1 s)**: bilah berputar **10×**
   lebih cepat dan bisa mengenai bola yang sama lagi tiap **4 step**. Hit scythe tidak memberi
   knockback (bilah terus memotong). Setelah reap selesai, lawan aman selama hit cooldown normal
   (800 ms), jadi reap tidak bisa berantai. Rata-rata ≈ 2.2 hit per reap (maks ≈ 7); win rate
   46% (20 seed × kedua slot vs 5 weapon lain), lemah vs Bow (15%). Renderer: swing trail abu-abu
   selama reap.
+- **Revolver — Shooter + aim lock** (`shooter` dengan `magazine` + `aimLock`): saat lawan masuk
+  ±6° dan peluru masih ada, revolver **berhenti berputar** dan menembak beruntun (tiap 6 step)
+  selama lawan tetap dalam ±20°. Magazine **6 peluru** (speed 520, radius 3, damage 2,
+  knockback 25 searah tembakan), lalu reload **225 step (3.75 s)** sambil berputar lagi.
+  Peluru bisa ditepis / dipantulkan riposte seperti panah; revolver yang diam mudah di-clash.
 
 ### 3.3 Aturan combat umum
 
 - **Weapon clash** (weapon vs weapon) bukan damage; hasilnya satu dari `parry` / `bounce` /
   `disarm`, ditentukan oleh `weight` + RNG (`resolveClash` di `combat.ts`):
-  - selisih bobot < 10% → `parry` (kecuali ada weapon `cannotBeParried`);
+  - selisih bobot < 10% → `parry` (weapon sejenis selalu parry);
   - selain itu `disarm` dengan peluang = porsi bobot yang lebih berat, **dibatasi 60%**
     (`MAX_DISARM_CHANCE`), sisanya `bounce`.
   - Disarm = weapon yang kalah stun **18 step** (tidak bisa memberi damage).
+  - Visual (renderer saja): parry memunculkan shockwave **putih** kecil di titik benturan
+    (wall slam Hammer memakai shockwave abu-abu yang lebih besar).
+- **Projectile vs projectile**: projectile milik lawan yang bertemu saling hancur (berlaku untuk
+  semua weapon ranged). Dicek *swept* sepanjang gerakan satu step, jadi tembakan cepat yang
+  berhadapan tidak bisa saling tembus.
 - Hit weapon memberi knockback dasar 50 (Hammer memakai `launchSpeed`); clash knockback 120.
 - **Hit cooldown** per pasangan attacker–target, agar satu ayunan tidak kena tiap frame.
 
 ### 3.4 Status balance terakhir
 
-Win rate (engine 1.1.0, 20 seed × kedua slot, batas 90 s): Sword 62%, Hammer 68%, Spear 44%,
-Shuriken 33%, Bow 43%. **Matchup individual masih timpang** (mis. Hammer 75% vs Sword,
-Sword 78% vs Spear/Shuriken, Spear 83% vs Shuriken).
+Win rate per weapon, pooled atas semua race (engine 1.6.0,
+`npm run sim -- --axes weapon,race --runs 40 --seed 777`): Hammer 57%, Sword 52%, Scythe 51%,
+Bow 49%, Revolver 48%, Spear 41%. **Matchup individual masih timpang** (race Human,
+`--runs 100`): Sword 81% vs Spear, Revolver 74% vs Spear tapi 40% vs Bow, Hammer 68% vs Sword.
+Engine 1.7.0 (Bow metal menahan proyektil, Spear Thrust; weapon saja, `--runs 100 --seed 7`):
+Bow 56%, Hammer 52%, Spear 50% (naik dari 36% dengan tip ×2), Sword 48%, Scythe 47%,
+Revolver 44%. Matchup Spear 43–56%; Bow vs Revolver 72% (timpang sejak Bow metal).
 Perubahan kecil bisa membalik seluruh matchup — ukur ulang setelah tiap perubahan stat.
 
 ### 3.5 Menambah weapon
@@ -163,8 +187,14 @@ Perubahan kecil bisa membalik seluruh matchup — ukur ulang setelah tiap peruba
    atur `spriteId`, `pivot`, `spriteReach` agar cocok dengan hitbox (cek *Show hitboxes*).
 4. Otomatis muncul di roda Roulette. Bump `engineVersion`.
 
-Field opsional yang tersedia: `projectile`, `cannotBeParried`, `launchSpeed`, `reboundOnHit`,
-`wallSlam`, `riposte`, `reap`, `tipStrike`, `summon`, `projectileBlockable` (lihat `engine/weapons/types.ts`).
+Mekanik khusus dipasang lewat `behaviors` (komposisi), dipilih dari `engine/weapons/behaviors/`:
+`riposte`, `reap`, `thrust`, `heavyBlow`, `shooter`. Mekanik baru = file behavior baru yang
+mengimplementasikan hook di `engine/weapons/behavior.ts` (`spinMultiplier`, `onStep`, `onClash`,
+`hitMultiplier`, `afterHit`, `projectileResponse`); engine tidak perlu diubah.
+
+**Aturan:** behavior hanya menyentuh weapon & state-nya sendiri. Interaksi antar weapon hanya
+lewat konsep generik engine (menang/kalah clash, projectile yang menyentuh weapon), tidak pernah
+dengan mengecek definisi weapon lain.
 
 ---
 
@@ -175,7 +205,7 @@ Field opsional yang tersedia: `projectile`, `cannotBeParried`, `launchSpeed`, `r
 | Prioritas | Item | Catatan |
 |---|---|---|
 | Tinggi | **Balance pass lanjutan** | Fokus ke matchup yang timpang & tidak tergantung seed, bukan hanya win rate rata-rata. |
-| Tinggi | **Balance race Tier 1**, lalu Tier 2 & tampilan race | Orc sedikit kuat, Elf lemah; sangat tergantung weapon (Shuriken, Bow). |
+| Tinggi | **Balance race Tier 1**, lalu Tier 2 & tampilan race | Orc sedikit kuat, Elf lemah; sangat tergantung weapon (mis. Bow). |
 | Tinggi | **Trait & Ability** (pengganti sistem Skill lama) | Lihat 4.2. |
 | Sedang | **UI Login / Register / Logout** | API `/api/auth/*` sudah ada; butuh PostgreSQL jalan. |
 | Sedang | **Home page** | Intro singkat + link ke Roulette & Versus. |
@@ -188,8 +218,11 @@ Penamaan sudah dikonfirmasi user: **Trait = efek pasif** (ke ball atau weapon),
 **Ability = skill aktif dengan cooldown**. Istilah "Skill" lama tidak dipakai lagi.
 Sistem skill lama (Vampire, Spike, Blaster, Splitter, Grower) **sudah dihapus**;
 kodenya di commit `548a969` bisa jadi referensi pola hook (`onTick`, `onHit`, `onHurt`,
-`onWallBounce`, `onDeath`). `engine/status.ts` (status effect berdurasi) masih ada dan
-cocok untuk efek Ability.
+`onWallBounce`, `onDeath`). `engine/status.ts` (status effect berdurasi) cocok untuk efek
+Trait/Ability: satu sistem untuk buff & debuff (`polarity`), pasang lewat `applyStatus()`,
+stat efektif dihitung ulang tiap step dari `ball.base` + modifier (`recomputeStats`).
+Debuff yang sudah ada: `slow` (modifier), `poison` (DoT, stack s/d 3), `stun` (control).
+Belum ada sumber yang memasangnya — weapon/Trait/Ability yang memakai status masih ⏳.
 
 Urutan roda Roulette yang dituju:
 
@@ -206,6 +239,8 @@ Race (✅ ada)  →  Weapon (✅ ada)  →  Trait (⏳)  →  Ability (⏳)  →
 
 ### 4.3 Ide lanjutan (belum dijadwalkan)
 
+- **Aura**: tampilan visual status aktif (buff/debuff/trait seperti berserk) yang memancar
+  dari bola atau senjata. Draft & pertanyaan terbuka di `docs/AURA.md`.
 - Roulette: tombol Back, ringkasan sebelum Save, preset rarity, roda appearance, animasi hasil.
 - Simpan snapshot bobot roda bersama bola agar seed bisa di-replay persis.
 - Damage source baru yang sudah disiapkan union-nya: `area`, `dot`, `environment`, `beam`, `summon`, `reflect`.
@@ -221,6 +256,7 @@ Race (✅ ada)  →  Weapon (✅ ada)  →  Trait (⏳)  →  Ability (⏳)  →
 | `README.md` | Setup lokal, arsitektur, cara extend (weapon, damage source, trait/ability), determinism, roles. |
 | `engine/README.md` | Detail engine. |
 | `docs/ROULETTE.md` | Fitur Roulette & rencana Trait/Ability (bahasa Indonesia). |
+| `docs/AURA.md` | Draft konsep Aura (visual status buff/debuff), masih dibahas. |
 | `docs/ASSETS_PLAN.md` | Katalog aset pixel-art (ukuran, pivot, hitbox, prompt). |
 
 ### Konvensi kerja

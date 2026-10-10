@@ -2,9 +2,9 @@
 export { sword } from './sword'
 export { hammer } from './hammer'
 export { spear } from './spear'
-export { shuriken } from './shuriken'
 export { bow } from './bow'
 export { scythe } from './scythe'
+export { revolver } from './revolver'
 
 export { weaponRegistry, WeaponRegistry } from './registry'
 export type {
@@ -12,5 +12,6 @@ export type {
   WeaponInstance,
   WeaponMode,
   Hitbox,
-  ProjectileSettings,
 } from './types'
+export type { WeaponBehavior, BehaviorContext, HitResponse } from './behavior'
+export type { ProjectileSettings } from './behaviors/shooter'

@@ -36,25 +36,6 @@ export class WeaponRegistry {
     if (!(def.weight > 0)) fail('weight', 'must be > 0')
     if (!(def.hitCooldown >= 0)) fail('hitCooldown', 'must be >= 0')
     if (!def.hitbox) fail('hitbox', 'is required')
-
-    if (def.reap) {
-      const r = def.reap
-      if (!(r.windowSteps >= 1) || !Number.isInteger(r.windowSteps)) fail('reap.windowSteps', 'must be an integer >= 1')
-      if (!(r.spinBoost > 0)) fail('reap.spinBoost', 'must be > 0')
-      if (!(r.hitCooldownSteps >= 1) || !Number.isInteger(r.hitCooldownSteps)) {
-        fail('reap.hitCooldownSteps', 'must be an integer >= 1')
-      }
-    }
-
-    if (def.projectile) {
-      const p = def.projectile
-      if (!(p.speed > 0)) fail('projectile.speed', 'must be > 0')
-      if (!(p.radius > 0)) fail('projectile.radius', 'must be > 0')
-      if (!(p.damage >= 0)) fail('projectile.damage', 'must be >= 0')
-      if (!(p.fireInterval >= 1) || !Number.isInteger(p.fireInterval)) {
-        fail('projectile.fireInterval', 'must be an integer >= 1')
-      }
-    }
   }
 
   get(id: string): WeaponDefinition | undefined {

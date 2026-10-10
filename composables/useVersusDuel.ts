@@ -1,13 +1,15 @@
 import { shallowRef, type Ref, type ShallowRef } from 'vue'
 import type { DuelConfig } from '~/engine/config'
-import type { EngineEvent } from '~/engine/events'
 import type { Ball, Entity, EntityId, Projectile, WeaponEntity } from '~/engine/entities'
 import { createEngine, TIMESTEP, type Engine } from '~/engine/engine'
-import { useSprites } from '~/composables/useSprites'
-import { usePixelFont } from '~/composables/usePixelFont'
-import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
-import '~/engine/weapons/index'
+import { activeBehaviorId, landsHeavy, weaponLunge } from '~/engine/weapons/behavior'
 import { weaponRegistry } from '~/engine/weapons/registry'
+import { useSprites } from '~/composables/useSprites'
+import type { SoundEvent } from '~/composables/useAudio'
+import { BALL_PIXEL, useBallSprite } from '~/composables/useBallSprite'
+import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
+import { BALL_DEFAULT_FILL } from '~/utils/pixelBall'
+import '~/engine/weapons/index'
 
 export interface HpView {
   id: EntityId
@@ -18,13 +20,13 @@ export interface HpView {
 export interface VersusView {
   hp: ShallowRef<HpView[]>
   winner: ShallowRef<EntityId | null | undefined>
-  lastEvent: ShallowRef<EngineEvent | null>
 }
 
 export interface VersusDuel {
   view: VersusView
   start(): void
-  rematch(): void
+  /** Restart with a new config (fresh seed and start positions). */
+  rematch(next: DuelConfig): void
   dispose(): void
 }
 
@@ -37,7 +39,32 @@ const EDG = {
   hpFrame: '#181425',
   hitbox: '#fee761',
   text: '#ffffff',
+  panel: '#3a4466',
+  panelShade: '#262b44',
+  hpLow: '#e43b44',
+  fog: '#c0cbdc',
+  sand: '#ead4aa',
+  gold: '#feae34',
+  goldShadow: '#733e39',
 }
+
+/** In-frame HUD (part of the recording), in arena units. Text uses the page's
+ *  pixel font, which is crisp at multiples of 8. */
+const FONT = '"Press Start 2P", monospace'
+const HUD_H = 56
+const HUD_GAP = 8 // between the HUD and the arena when it sits above it
+const HUD_VS_W = 28
+/** Status icons on the HUD's HP row: 8×8 art drawn at 2×. */
+const STATUS_ICON_SCALE = 2
+const STATUS_ICON_GAP = 4
+/** A status icon blinks over its last half second (sim steps, so a recording
+ *  blinks the same way as the live duel). */
+const STATUS_BLINK_STEPS = 30
+/** Below this HP fraction the HUD bar turns red. */
+const HP_LOW = 0.35
+/** Winner card background opacity: the arena (e.g. a ball dying mid-arena)
+ *  shows through; the text stays opaque. */
+const WINNER_CARD_ALPHA = 0.55
 
 /** Hit-stop: real-time seconds the simulation freezes after a damage event.
  *  Render-only (the engine just isn't stepped), so determinism is unaffected. */
@@ -45,12 +72,13 @@ const HIT_STOP = 0.08
 /** Heavy weapons (those with a wall slam, e.g. Hammer) freeze longer on contact. */
 const HEAVY_HIT_STOP = 0.2
 
-/** Wall-slam shockwave: a gray ring from the wall contact that widens while its
- *  border thins out to nothing. Render-only, clipped to the arena. */
+/** Shockwave: a ring that widens while its border thins out to nothing.
+ *  Render-only, clipped to the arena. Gray from a wall slam's contact point,
+ *  smaller and white from a parry (an even clash). */
 const SHOCKWAVE_LIFE = 0.45 // seconds
-const SHOCKWAVE_RADIUS = 56 // arena px at the end
 const SHOCKWAVE_WIDTH = 5 // border px at the start
-const SHOCKWAVE_COLOR = '#8b9bb4'
+const SLAM_SHOCKWAVE = { radius: 56, color: '#8b9bb4' } // radius: arena px at the end
+const PARRY_SHOCKWAVE = { radius: 40, color: '#ffffff' }
 
 /** Blood burst on damage: chunky square pixels, render-only (Math.random is
  *  fine here, it never feeds back into the engine). */
@@ -71,10 +99,42 @@ const CLASH_HIT_STOP = 0.05
 /** Riposte ready: a swing trail behind the blade, swept over its last few step
  *  poses. Colors go newest → oldest. */
 const RIPOSTE_TRAIL_STEPS = 6
-const RIPOSTE_TRAIL_COLORS = ['#ffffff', '#fee761', '#feae34', '#f77622']
-/** Scythe reap: the same swing trail in steel tones. */
-const REAP_TRAIL_COLORS = ['#ffffff', '#c0cbdc', '#8b9bb4', '#5a6988']
+/** Trail colors per weapon behavior whose burst is running: riposte in gold,
+ *  Scythe reap in steel tones. */
+const TRAIL_COLORS: Record<string, string[]> = {
+  'riposte': ['#ffffff', '#fee761', '#feae34', '#f77622'],
+  'reap': ['#ffffff', '#c0cbdc', '#8b9bb4', '#5a6988'],
+}
 const RIPOSTE_TRAIL_INNER = 0.35 // trail covers the blade from 35% of its length to the tip
+
+/** Blocked projectile: it glances off the blocking weapon, veering toward the
+ *  blade's spin, slowing and tumbling, then fades out. Render-only. */
+const DEFLECT_LIFE = 0.45 // seconds
+const DEFLECT_FADE = 0.4 // last fraction of the life spent fading out
+const DEFLECT_SPEED = 0.35 // × the projectile's speed at the block
+const DEFLECT_TURN = Math.PI / 5 // veer toward the spin direction (36°)
+const DEFLECT_SPIN = 30 // rad/s tumble, in the blade's spin direction
+const DEFLECT_DRAG = 5
+
+/** Death: the losing ball freezes and blinks white in slow motion, then
+ *  shatters into its own pixels while its weapon tumbles away. Render-only.
+ *  Times are real seconds. */
+const DEATH_BLINK = 0.45 // blinking, before the shatter
+const DEATH_BLINK_PERIOD = 0.15 // one white + one normal phase
+const DEATH_SLOWMO = 0.3 // × sim and effect time while it blinks
+const SHATTER_LIFE = 0.8
+const SHATTER_SPEED = 170 // px/s for a pixel on the rim
+const SHATTER_AWAY = 70 // px/s added away from the opponent
+const DROPPED_LIFE = 1 // the dead ball's weapon tumbling away
+const DROPPED_SPEED = 60
+const DROPPED_SPIN = 9 // rad/s
+/** The winner card waits for the death to play out. */
+const WINNER_CARD_DELAY = 1.3
+
+/** Shot sound per weapon id (default: arrow). */
+const SHOT_SOUNDS: Record<string, SoundEvent> = { revolver: 'shootBullet' }
+/** Status sounds, played when a status first lands (stacks 1). */
+const STATUS_SOUNDS: Record<string, SoundEvent> = { poison: 'poison', slow: 'slow', stun: 'stun' }
 
 /** Per-source hit-flash (Req 16.5, 16.6): a 32×32 pixel sprite at the impact,
  *  shaped differently per source (projectile = cross burst). Weapon hits have
@@ -104,6 +164,29 @@ interface Shockwave {
   x: number
   y: number
   life: number // seconds remaining
+  radius: number // arena px at the end
+  color: string
+}
+
+interface Deflected {
+  x: number
+  y: number
+  vx: number
+  vy: number
+  angle: number
+  spin: number // rad/s
+  life: number // seconds remaining
+  spriteId: string
+  scale: number
+}
+
+/** A dead ball: blinking at its death spot until it shatters. */
+interface Dying {
+  x: number
+  y: number
+  sprite: HTMLCanvasElement // the ball as drawn (with race parts), in ball pixels
+  away: number // angle away from the opponent
+  t: number // real seconds since death
 }
 
 interface HitFlash {
@@ -121,12 +204,15 @@ export interface VersusOptions {
   reducedMotion?: boolean
   /** Display names, in `ballConfigs` order, for the on-canvas winner label. */
   names?: string[]
+  /** Called for every sound to play, as it happens (not batched per frame).
+   *  The death sounds follow the death animation; the jingle, the winner card. */
+  onSound?: (sound: SoundEvent) => void
 }
 
 /**
  * Client-only duel driver + retro renderer (Req 11.5, 11.6, 11.8, 11.10, 11.11).
  * Owns the rAF loop, advances the engine by whole 1/60s steps scaled by sim
- * speed, draws the World once per frame, and surfaces hp/winner/lastEvent via
+ * speed, draws the World once per frame, and surfaces hp/winner via
  * shallowRefs updated at most once per frame (never deep-binding entities).
  */
 export function useVersusDuel(
@@ -138,12 +224,11 @@ export function useVersusDuel(
 ): VersusDuel {
   const reduced = !!opts?.reducedMotion
   const { preloadAll, drawSprite } = useSprites()
-  const { preloadFont, drawText } = usePixelFont()
+  const { ballSprite } = useBallSprite()
 
   const view: VersusView = {
     hp: shallowRef<HpView[]>([]),
     winner: shallowRef<EntityId | null | undefined>(undefined),
-    lastEvent: shallowRef<EngineEvent | null>(null),
   }
 
   let engine: Engine | null = null
@@ -155,6 +240,13 @@ export function useVersusDuel(
   let flashes: Flash[] = []
   let hitFlashes: HitFlash[] = []
   let shockwaves: Shockwave[] = []
+  let deflected: Deflected[] = []
+  let dying: Dying[] = []
+  let endedFor = 0 // real seconds since the duel ended
+  let cardShown = false
+  let seenShots = new Set<EntityId>() // projectiles already heard firing
+  const sound = (s: SoundEvent) => opts?.onSound?.(s)
+  const whiteSprites = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>()
   // Set by a `wallSlam` event; the damage event that follows uses its point.
   let pendingSlam: { ballId: EntityId; x: number; y: number } | null = null
   // Entity state before the latest step, for render interpolation.
@@ -167,10 +259,10 @@ export function useVersusDuel(
       seed,
       config: duel,
       onEvent: (e) => {
-        view.lastEvent.value = e
         if (e.type === 'wallSlam') {
           pendingSlam = { ballId: e.ballId, x: e.x, y: e.y }
-          if (!reduced) shockwaves.push({ x: e.x, y: e.y, life: SHOCKWAVE_LIFE })
+          sound('slam')
+          if (!reduced) shockwaves.push({ x: e.x, y: e.y, life: SHOCKWAVE_LIFE, ...SLAM_SHOCKWAVE })
           return
         }
         if (e.type === 'damage' && e.amount > 0) {
@@ -180,23 +272,37 @@ export function useVersusDuel(
           const at = slam ?? impactPoint(e.targetId, e.attackerId)
           const crit = e.style === 'critical'
           if (sprite && at) hitFlashes.push({ ...at, life: HIT_FLASH, spriteId: sprite, scale: crit ? 2 : 1 })
+          // Heavy contact (Hammer, Spear thrust) freezes longest; slams and
+          // criticals (riposte) land harder than a plain hit.
+          const heavy = !slam && e.source.tag === 'weapon' && isHeavyHit(e.attackerId, e.targetId)
+          if (!slam) sound(hitSound(e.source.tag, heavy, crit)) // a slam was heard at the wall
           if (reduced) return // decorative motion off; flash above still shows
-          // Heavy contact (Hammer) freezes longest; slams and criticals
-          // (riposte, spear tip) land harder than a plain hit.
-          const heavy = !slam && e.source.tag === 'weapon' && isHeavyAttacker(e.attackerId)
           hitStop = heavy ? HEAVY_HIT_STOP : slam || crit ? HIT_STOP * 1.5 : HIT_STOP
           spawnBlood(e.targetId, e.attackerId, crit ? e.amount * 2 : e.amount, slam ?? undefined)
-        } else if (e.type === 'projectileBlocked') {
+        } else if (e.type === 'ballDied') {
+          sound('death')
+          if (!reduced) startDeath(e.ballId)
+        } else if (e.type === 'statusApplied') {
+          const s = STATUS_SOUNDS[e.statusId]
+          if (s && e.stacks === 1) sound(s)
+        } else if (e.type === 'projectileBlocked' || e.type === 'projectilesCollided') {
+          sound('deflect')
           if (reduced) return
           spawnSparksAt(e.x, e.y, SPARK_COUNT.parry)
+          if (e.type === 'projectileBlocked') spawnDeflected(e.projectileId, e.weaponId, e.x, e.y)
         } else if (e.type === 'projectileReflected') {
+          sound('reflect')
           if (reduced) return
           hitStop = Math.max(hitStop, CLASH_HIT_STOP)
           spawnSparksAt(e.x, e.y, SPARK_COUNT.disarm)
         } else if (e.type === 'weaponClash') {
+          sound(e.outcome)
           if (reduced) return
           hitStop = Math.max(hitStop, CLASH_HIT_STOP)
-          spawnSparks(e.a, e.b, e.outcome)
+          const at = clashPoint(e.a, e.b)
+          if (!at) return
+          spawnSparksAt(at.x, at.y, SPARK_COUNT[e.outcome])
+          if (e.outcome === 'parry') shockwaves.push({ ...at, life: SHOCKWAVE_LIFE, ...PARRY_SHOCKWAVE })
         }
       },
     })
@@ -204,10 +310,29 @@ export function useVersusDuel(
     syncHp()
   }
 
-  /** Does the attacker wield a heavy (wall-slamming) weapon? */
-  function isHeavyAttacker(attackerId: EntityId | ''): boolean {
-    return !!engine?.world.entities.some(
-      (w) => w.kind === 'weapon' && w.alive && w.ownerId === attackerId && !!w.def.wallSlam,
+  function hitSound(tag: string, heavy: boolean, crit: boolean): SoundEvent {
+    if (tag === 'dot') return 'hitDot'
+    if (tag === 'projectile' || tag === 'reflect') return 'hitProjectile'
+    return crit ? 'hitCrit' : heavy ? 'hitHeavy' : 'hit'
+  }
+
+  /** A shot sound for each projectile that appeared since the last check. */
+  function detectShots(): void {
+    const now = new Set<EntityId>()
+    for (const e of engine!.world.entities) {
+      if (e.kind !== 'projectile' || !e.alive) continue
+      now.add(e.id)
+      if (!seenShots.has(e.id)) sound(SHOT_SOUNDS[e.weaponId] ?? 'shootArrow')
+    }
+    seenShots = now
+  }
+
+  /** Does the attacker's weapon land this hit heavy (Hammer, Spear thrust)?
+   *  Asked while the hit is applied, so the pose is the one that hit. */
+  function isHeavyHit(attackerId: EntityId | '', targetId: EntityId): boolean {
+    const target = engine?.world.ballById(targetId)
+    return !!target && !!engine?.world.entities.some(
+      (w) => w.kind === 'weapon' && w.alive && w.ownerId === attackerId && landsHeavy(w, target),
     )
   }
 
@@ -300,15 +425,16 @@ export function useVersusDuel(
   }
 
   /** Radial burst of sparks + a white flash where the two weapons meet. */
-  function spawnSparks(aId: EntityId, bId: EntityId, outcome: keyof typeof SPARK_COUNT): void {
+  /** Where two clashing weapons touch: the midpoint of each blade's point
+   *  closest to the other. Undefined if either is gone. */
+  function clashPoint(aId: EntityId, bId: EntityId): { x: number; y: number } | undefined {
     const ents = engine?.world.entities
     const a = ents?.find((e): e is WeaponEntity => e.id === aId && e.kind === 'weapon')
     const b = ents?.find((e): e is WeaponEntity => e.id === bId && e.kind === 'weapon')
-    if (!a || !b) return
-    // Contact ≈ midpoint of each blade's point closest to the other.
+    if (!a || !b) return undefined
     const pa = closestOnWeapon(a, b.position.x, b.position.y)
     const pb = closestOnWeapon(b, pa.x, pa.y)
-    spawnSparksAt((pa.x + pb.x) / 2, (pa.y + pb.y) / 2, SPARK_COUNT[outcome])
+    return { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 }
   }
 
   /** Radial spark burst + white flash at a point (clashes, swatted arrows). */
@@ -332,6 +458,121 @@ export function useVersusDuel(
     }
   }
 
+  /** The blocked projectile glances off: slower, turned toward the blocker's
+   *  spin, tumbling the same way. */
+  function spawnDeflected(projectileId: EntityId, weaponId: EntityId, x: number, y: number): void {
+    const p = engine?.world.entities.find((e): e is Projectile => e.id === projectileId && e.kind === 'projectile')
+    const w = engine?.world.entities.find((e): e is WeaponEntity => e.id === weaponId && e.kind === 'weapon')
+    const spriteId = p && weaponRegistry.get(p.weaponId)?.projectileSprite?.id
+    if (!p || !w || !spriteId) return
+    const dir = Math.sign(w.angularSpeed) || 1
+    const heading = Math.atan2(p.velocity.y, p.velocity.x)
+    const turned = heading + dir * DEFLECT_TURN
+    const speed = Math.hypot(p.velocity.x, p.velocity.y) * DEFLECT_SPEED
+    deflected.push({
+      x,
+      y,
+      vx: Math.cos(turned) * speed,
+      vy: Math.sin(turned) * speed,
+      angle: heading,
+      spin: dir * DEFLECT_SPIN,
+      life: DEFLECT_LIFE,
+      spriteId,
+      scale: 2,
+    })
+  }
+
+  /** The dead ball freezes where it died; its weapons fall off and tumble away. */
+  function startDeath(ballId: EntityId): void {
+    const b = engine?.world.ballById(ballId)
+    if (!b) return
+    const foe = engine!.world.entities.find((e): e is Ball => e.kind === 'ball' && e.alive && e.id !== ballId)
+    const away = foe
+      ? Math.atan2(b.position.y - foe.position.y, b.position.x - foe.position.x)
+      : Math.random() * Math.PI * 2
+    dying.push({ x: b.position.x, y: b.position.y, sprite: ballCanvas(b), away, t: 0 })
+    for (const w of engine!.world.entities) {
+      if (w.kind !== 'weapon' || w.ownerId !== ballId || !w.def.spriteId) continue
+      const a = away + (Math.random() - 0.5) * Math.PI * 0.8
+      const dir = Math.sign(w.angularSpeed) || 1
+      deflected.push({
+        x: w.position.x,
+        y: w.position.y,
+        vx: Math.cos(a) * DROPPED_SPEED,
+        vy: Math.sin(a) * DROPPED_SPEED,
+        angle: w.angle,
+        spin: dir * DROPPED_SPIN,
+        life: DROPPED_LIFE,
+        spriteId: w.def.spriteId,
+        scale: w.def.spriteReach ? w.def.length / w.def.spriteReach : 2,
+      })
+    }
+  }
+
+  /** Advance dead balls; one that has blinked long enough shatters. */
+  function updateDying(dt: number): void {
+    for (const d of dying) {
+      d.t += dt
+      if (d.t >= DEATH_BLINK) shatter(d)
+    }
+    dying = dying.filter((d) => d.t < DEATH_BLINK)
+  }
+
+  /** Every pixel of the ball becomes a chunk flying out from its center,
+   *  faster at the rim, pushed away from the opponent. */
+  function shatter(d: Dying): void {
+    sound('shatter')
+    const { width: w, height: h } = d.sprite
+    const data = d.sprite.getContext('2d')!.getImageData(0, 0, w, h).data
+    const half = (w * BALL_PIXEL) / 2
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const i = (py * w + px) * 4
+        if (data[i + 3] === 0) continue
+        const ox = (px + 0.5) * BALL_PIXEL - half
+        const oy = (py + 0.5) * BALL_PIXEL - half
+        const out = Math.atan2(oy, ox)
+        const speed = SHATTER_SPEED * (0.3 + Math.min(1, Math.hypot(ox, oy) / half)) * (0.6 + Math.random() * 0.6)
+        const life = SHATTER_LIFE * (0.6 + Math.random() * 0.4)
+        particles.push({
+          x: d.x + ox,
+          y: d.y + oy,
+          vx: Math.cos(out) * speed + Math.cos(d.away) * SHATTER_AWAY,
+          vy: Math.sin(out) * speed + Math.sin(d.away) * SHATTER_AWAY,
+          life,
+          maxLife: life,
+          size: BALL_PIXEL,
+          color: `rgb(${data[i]}, ${data[i + 1]}, ${data[i + 2]})`,
+          streak: false,
+        })
+      }
+    }
+  }
+
+  /** The dead ball at its death spot, white on every other blink phase. */
+  function drawDying(ctx: CanvasRenderingContext2D): void {
+    for (const d of dying) {
+      const white = Math.floor(d.t / (DEATH_BLINK_PERIOD / 2)) % 2 === 0
+      drawBallCanvas(ctx, white ? whiteSprite(d.sprite) : d.sprite, d.x, d.y)
+    }
+  }
+
+  /** A solid white silhouette of a ball sprite, cached per sprite. */
+  function whiteSprite(src: HTMLCanvasElement): HTMLCanvasElement {
+    const cached = whiteSprites.get(src)
+    if (cached) return cached
+    const c = document.createElement('canvas')
+    c.width = src.width
+    c.height = src.height
+    const g = c.getContext('2d')!
+    g.drawImage(src, 0, 0)
+    g.globalCompositeOperation = 'source-in' // keep alpha, replace color
+    g.fillStyle = '#ffffff'
+    g.fillRect(0, 0, c.width, c.height)
+    whiteSprites.set(src, c)
+    return c
+  }
+
   function updateParticles(dt: number): void {
     const kBlood = Math.exp(-BLOOD_DRAG * dt)
     const kSpark = Math.exp(-SPARK_DRAG * dt)
@@ -346,6 +587,25 @@ export function useVersusDuel(
     particles = particles.filter((p) => p.life > 0)
     for (const f of flashes) f.life -= dt
     flashes = flashes.filter((f) => f.life > 0)
+    const kDeflect = Math.exp(-DEFLECT_DRAG * dt)
+    for (const d of deflected) {
+      d.x += d.vx * dt
+      d.y += d.vy * dt
+      d.vx *= kDeflect
+      d.vy *= kDeflect
+      d.angle += d.spin * dt
+      d.life -= dt
+    }
+    deflected = deflected.filter((d) => d.life > 0)
+  }
+
+  /** Tumbling around the sprite's center; fades out at the end of its life. */
+  function drawDeflected(ctx: CanvasRenderingContext2D): void {
+    for (const d of deflected) {
+      ctx.globalAlpha = Math.min(1, d.life / (DEFLECT_LIFE * DEFLECT_FADE))
+      drawSprite(ctx, d.spriteId, d.x, d.y, d.scale, d.angle)
+    }
+    ctx.globalAlpha = 1
   }
 
   function updateHitFlashes(dt: number): void {
@@ -363,10 +623,10 @@ export function useVersusDuel(
     ctx.beginPath()
     ctx.rect(0, 0, width, height)
     ctx.clip()
-    ctx.fillStyle = SHOCKWAVE_COLOR
     for (const w of shockwaves) {
+      ctx.fillStyle = w.color
       const t = 1 - w.life / SHOCKWAVE_LIFE // 0 → 1
-      const outer = 4 + (SHOCKWAVE_RADIUS - 4) * Math.sqrt(t) // fast start, eases out
+      const outer = 4 + (w.radius - 4) * Math.sqrt(t) // fast start, eases out
       const thick = SHOCKWAVE_WIDTH * (1 - t)
       if (thick < 0.5) continue
       const inner = outer - thick
@@ -424,7 +684,7 @@ export function useVersusDuel(
         angle: e.kind === 'weapon' ? e.angle : 0,
       })
       if (e.kind !== 'weapon') continue
-      if ((e.riposteSteps <= 0 && e.reapSteps <= 0) || !e.alive) {
+      if (!activeBehaviorId(e) || !e.alive) {
         trails.delete(e.id)
         continue
       }
@@ -478,47 +738,48 @@ export function useVersusDuel(
     ctx.strokeRect(0, 0, width, height)
   }
 
+  /** The fighter picker's pixel-art ball with its race's parts, drawn at the
+   *  weapon sprites' pixel size so ball and weapon match. */
   function drawBall(ctx: CanvasRenderingContext2D, b: Ball): void {
-    ctx.save()
-    ctx.beginPath()
-    ctx.arc(b.position.x, b.position.y, b.radius, 0, Math.PI * 2)
-    ctx.clip()
-    const app = findAppearance(b.id)
-    if (app?.type === 'color') {
-      ctx.fillStyle = app.value
-      ctx.fillRect(b.position.x - b.radius, b.position.y - b.radius, b.radius * 2, b.radius * 2)
-    } else {
-      // pattern/image handled later; default solid fallback
-      ctx.fillStyle = '#c0cbdc'
-      ctx.fillRect(b.position.x - b.radius, b.position.y - b.radius, b.radius * 2, b.radius * 2)
-    }
-    ctx.restore()
-    // outline for retro pop
-    ctx.strokeStyle = EDG.wall
-    ctx.lineWidth = 2
-    ctx.beginPath()
-    ctx.arc(b.position.x, b.position.y, b.radius, 0, Math.PI * 2)
-    ctx.stroke()
+    drawBallCanvas(ctx, ballCanvas(b), b.position.x, b.position.y)
   }
 
-  function findAppearance(id: EntityId) {
+  function ballCanvas(b: Ball): HTMLCanvasElement {
+    const config = findConfig(b.id)
+    const app = config?.appearance
+    const fill = app?.type === 'color' ? app.value : BALL_DEFAULT_FILL // pattern/image handled later
+    const cells = Math.max(4, Math.round((b.radius * 2) / BALL_PIXEL))
+    return ballSprite(cells, fill, config?.raceId).canvas
+  }
+
+  /** A baked ball sprite centered on (x, y), at the ball pixel size. */
+  function drawBallCanvas(ctx: CanvasRenderingContext2D, sprite: HTMLCanvasElement, x: number, y: number): void {
+    const size = sprite.width * BALL_PIXEL
+    ctx.drawImage(sprite, Math.round(x - size / 2), Math.round(y - size / 2), size, size)
+  }
+
+  function findConfig(id: EntityId) {
     const idx = engine!.world.entities
       .filter((e) => e.kind === 'ball')
       .findIndex((e) => e.id === id)
-    return duel.ballConfigs[idx]?.appearance
+    return duel.ballConfigs[idx]
   }
 
   function drawWeapon(ctx: CanvasRenderingContext2D, w: WeaponEntity): void {
     const spriteId = w.def.spriteId
-    // Summoners (Shuriken) have no blade to draw; their shurikens are projectiles.
-    if (!spriteId || w.def.summon) return
+    if (!spriteId) return
     const anchor = gripAnchor(w)
     // Scale so the drawn grip→tip span equals the engine's weapon length:
     // what you see is exactly the hitbox.
     const scale = w.def.spriteReach ? w.def.length / w.def.spriteReach : 2
-    if (w.riposteSteps > 0) drawRiposteTrail(ctx, w, anchor, RIPOSTE_TRAIL_COLORS)
-    else if (w.reapSteps > 0) drawRiposteTrail(ctx, w, anchor, REAP_TRAIL_COLORS)
-    drawSprite(ctx, spriteId, anchor.x, anchor.y, scale, w.angle, w.def.pivot)
+    const burst = activeBehaviorId(w)
+    const trail = burst && TRAIL_COLORS[burst]
+    if (trail) drawRiposteTrail(ctx, w, anchor, trail)
+    // Spear thrust: drawn pushed out along its axis, away from the owner.
+    const lunge = weaponLunge(w)
+    const x = anchor.x + Math.cos(w.angle) * lunge
+    const y = anchor.y + Math.sin(w.angle) * lunge
+    drawSprite(ctx, spriteId, x, y, scale, w.angle, w.def.pivot)
   }
 
   /** Anchor the grip at the ball surface along the weapon angle, so the
@@ -577,18 +838,12 @@ export function useVersusDuel(
   }
 
   function drawProjectile(ctx: CanvasRenderingContext2D, p: Projectile): void {
-    const def = weaponRegistry.get(p.weaponId)
-    if (def?.summon && def.spriteId) {
-      // Shuriken: its weapon sprite at 2× (blade ≈ 28 px, hit radius 12),
-      // always spinning (render-only angle).
-      const spin = (engine!.world.tick * 0.45 + p.id) % (Math.PI * 2)
-      drawSprite(ctx, def.spriteId, p.position.x, p.position.y, 2, spin)
-      return
-    }
-    // Point along the flight direction; pivot on the tip, where the engine's
-    // hit circle is, so what you see is what hits.
+    // The firing weapon's projectile sprite, pointing along the flight; its
+    // pivot sits on the engine's hit circle, so what you see is what hits.
+    const sprite = weaponRegistry.get(p.weaponId)?.projectileSprite
+    if (!sprite) return
     const angle = Math.atan2(p.velocity.y, p.velocity.x)
-    drawSprite(ctx, 'projectile:arrow', p.position.x, p.position.y, 2, angle, { x: 11.5, y: 2.5 })
+    drawSprite(ctx, sprite.id, p.position.x, p.position.y, 2, angle, sprite.pivot)
   }
 
   function drawHpBars(ctx: CanvasRenderingContext2D): void {
@@ -659,21 +914,136 @@ export function useVersusDuel(
     for (const e of engine.world.entities) {
       if (e.kind === 'ball' && e.alive) drawBall(ctx, e)
     }
+    drawDying(ctx)
     for (const e of engine.world.entities) {
       if (e.kind === 'weapon' && e.alive) drawWeapon(ctx, e)
       else if (e.kind === 'projectile' && e.alive) drawProjectile(ctx, e)
     }
     drawShockwaves(ctx)
+    drawDeflected(ctx)
     drawParticles(ctx)
     drawHitFlashes(ctx)
     drawHpBars(ctx)
     if (opts?.showHitboxes) drawHitboxes(ctx)
 
-    if (engine.ended) {
-      const label =
-        engine.winner === null ? 'DRAW' : `WINNER: ${winnerLabel(engine.winner!)}`
-      drawText(ctx, label, 8, 8, 2)
+    if (engine.ended && endedFor >= winnerCardDelay()) drawWinner(ctx)
+    // Above the arena when the letterbox has room (9:16, 4:5), else over its top.
+    const above = (el.height - ah * scale) / 2 / scale >= HUD_H + HUD_GAP
+    drawHud(ctx, above ? -HUD_H - HUD_GAP : HUD_GAP)
+  }
+
+  function drawLabel(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    size: number,
+    color: string,
+    align: CanvasTextAlign = 'left',
+    shadow?: string,
+  ): void {
+    ctx.font = `${size}px ${FONT}`
+    ctx.textAlign = align
+    ctx.textBaseline = 'top'
+    if (shadow) {
+      ctx.fillStyle = shadow
+      ctx.fillText(text, x + size / 8, y + size / 8)
     }
+    ctx.fillStyle = color
+    ctx.fillText(text, x, y)
+  }
+
+  /** Cut a label to `max` characters (the pixel font is monospace). */
+  function fit(text: string, max: number): string {
+    return text.length <= max ? text : `${text.slice(0, max - 1)}.`
+  }
+
+  /** Name, HP bar and HP count of both fighters, VS in between. */
+  function drawHud(ctx: CanvasRenderingContext2D, y: number): void {
+    const { width } = duel.arenaConfig
+    const balls = engine!.world.entities.filter((e): e is Ball => e.kind === 'ball')
+    const panelW = (width - HUD_VS_W) / 2
+    ctx.save()
+    balls.slice(0, 2).forEach((b, i) => {
+      const x = i === 0 ? 0 : width - panelW
+      // Panel: slate body, ink frame, darker bottom edge (like .px-panel).
+      ctx.fillStyle = EDG.wall
+      ctx.fillRect(x, y, panelW, HUD_H)
+      ctx.fillStyle = EDG.panel
+      ctx.fillRect(x + 2, y + 2, panelW - 4, HUD_H - 4)
+      ctx.fillStyle = EDG.panelShade
+      ctx.fillRect(x + 2, y + HUD_H - 4, panelW - 4, 2)
+
+      const pad = 6
+      const right = i === 1
+      const tx = right ? x + panelW - pad : x + pad
+      const align = right ? 'right' : 'left'
+      const name = (opts?.names?.[i] ?? `Ball ${b.id}`).toUpperCase()
+      drawLabel(ctx, fit(name, Math.floor((panelW - pad * 2) / 8)), tx, y + pad, 8, EDG.text, align)
+
+      const barW = panelW - pad * 2
+      const barY = y + 18
+      ctx.fillStyle = EDG.wall
+      ctx.fillRect(x + pad, barY, barW, 8)
+      const f = b.alive ? hpBarFraction(b.hp, b.maxHp) : 0
+      const fillW = Math.round((barW - 4) * f)
+      ctx.fillStyle = f < HP_LOW ? EDG.hpLow : EDG.hpFill
+      // The right fighter's bar drains toward the middle, mirroring the left.
+      ctx.fillRect(right ? x + pad + 2 + (barW - 4 - fillW) : x + pad + 2, barY + 2, fillW, 4)
+
+      const hpText = `${Math.max(0, Math.ceil(b.alive ? b.hp : 0))}/${b.maxHp}`
+      drawLabel(ctx, hpText, tx, y + 34, 8, EDG.fog, align)
+      // Status icons on the HP row, packed toward the VS side (mirrored).
+      if (b.alive) drawStatusIcons(ctx, b, right ? x + pad : x + panelW - pad, y + 30, right)
+    })
+    drawLabel(ctx, 'VS', width / 2, y + HUD_H / 2 - 4, 8, EDG.hpLow, 'center', EDG.wall)
+    ctx.restore()
+  }
+
+  /** A ball's status icons, running from `edgeX` away from it: leftward for
+   *  the left panel, rightward for the right one. Stacks show as a digit. */
+  function drawStatusIcons(ctx: CanvasRenderingContext2D, b: Ball, edgeX: number, top: number, rightward: boolean): void {
+    const size = 8 * STATUS_ICON_SCALE
+    b.statusEffects.forEach((s, i) => {
+      if (!reduced && s.remaining <= STATUS_BLINK_STEPS && Math.floor(s.remaining / 4) % 2 === 1) return
+      const offset = i * (size + STATUS_ICON_GAP)
+      const left = rightward ? edgeX + offset : edgeX - offset - size
+      drawSprite(ctx, `status:${s.defId}`, left + size / 2, top + size / 2, STATUS_ICON_SCALE)
+      if (s.stacks > 1) drawLabel(ctx, String(s.stacks), left + size + 3, top + size - 6, 8, EDG.text, 'right', EDG.wall)
+    })
+  }
+
+  /** Result card in the middle of the arena. */
+  function drawWinner(ctx: CanvasRenderingContext2D): void {
+    const { width, height } = duel.arenaConfig
+    const draw = engine!.winner === null
+    const name = draw ? 'DRAW' : winnerLabel(engine!.winner!)
+    // Big type when the name fits the card, else the small size.
+    const cardW = width - 48
+    const size = name.length * 16 <= cardW - 24 ? 16 : 8
+    const cardH = draw ? 52 : 72
+    const cx = width / 2
+    const top = Math.round((height - cardH) / 2)
+    ctx.save()
+    ctx.globalAlpha = WINNER_CARD_ALPHA
+    ctx.fillStyle = EDG.gold
+    ctx.fillRect(24, top - 4, cardW, 4)
+    ctx.fillRect(24, top + cardH, cardW, 4)
+    ctx.fillStyle = EDG.wall
+    ctx.fillRect(24, top, cardW, cardH)
+    ctx.globalAlpha = 1
+    if (draw) {
+      drawLabel(ctx, 'DRAW', cx, top + (cardH - size) / 2, size, EDG.gold, 'center', EDG.goldShadow)
+    } else {
+      drawLabel(ctx, 'WINNER:', cx, top + 16, 8, EDG.sand, 'center')
+      drawLabel(ctx, fit(name, Math.floor((cardW - 24) / 8)), cx, top + 36, size, EDG.gold, 'center', EDG.goldShadow)
+    }
+    ctx.restore()
+  }
+
+  /** The card waits for the death animation, which reduced motion skips. */
+  function winnerCardDelay(): number {
+    return reduced ? 0 : WINNER_CARD_DELAY
   }
 
   // --- loop ---
@@ -684,12 +1054,20 @@ export function useVersusDuel(
     lastTime = now
 
     updateHitFlashes(dt) // real time, so the flash lasts HIT_FLASH even in a hit-stop
+    // A dying ball slows the whole scene (sim and effects) while it blinks.
+    const timeScale = dying.length > 0 ? DEATH_SLOWMO : 1
+    updateDying(dt)
+    if (engine.ended) endedFor += dt
+    if (engine.ended && !cardShown && endedFor >= winnerCardDelay()) {
+      cardShown = true
+      sound(engine.winner === null ? 'draw' : 'win')
+    }
     if (hitStop > 0) {
       // Frozen on a hit: burn real time without advancing the simulation.
       hitStop -= dt
     } else {
       // Whole 1/60 s steps owed for elapsed real time × sim speed (Req 15.7).
-      acc += dt
+      acc += dt * timeScale
       let steps = stepsForElapsed(acc, speed)
       acc -= (steps * TIMESTEP) / speed
       // Clamp to avoid a spiral of death on tab resume (scaled for fast speeds).
@@ -702,10 +1080,11 @@ export function useVersusDuel(
       for (let i = 0; i < steps && hitStop <= 0; i++) {
         snapshot()
         engine.step()
+        detectShots()
       }
       if (hitStop > 0) acc = 0
       // Particles freeze with the hit-stop, then burst out when it ends.
-      updateParticles(dt)
+      updateParticles(dt * timeScale)
     }
 
     syncHp()
@@ -719,17 +1098,21 @@ export function useVersusDuel(
 
   function start(): void {
     if (!engine) build()
-    preloadFont()
-    preloadAll().then(() => {
+    // The HUD uses the page's web font; wait for it so the first frames don't
+    // fall back to the system monospace.
+    const font = document.fonts?.load(`8px ${FONT}`).catch(() => undefined)
+    Promise.all([preloadAll(), font]).then(() => {
       lastTime = 0
       acc = 0
       raf = requestAnimationFrame(frame)
     })
   }
 
-  function rematch(): void {
+  function rematch(next: DuelConfig): void {
     cancel()
-    build() // same seed + config → identical duel (Req 11.10)
+    duel = next
+    seed = next.seed
+    build()
     lastTime = 0
     acc = 0
     hitStop = 0
@@ -739,6 +1122,11 @@ export function useVersusDuel(
     flashes = []
     hitFlashes = []
     shockwaves = []
+    deflected = []
+    dying = []
+    endedFor = 0
+    cardShown = false
+    seenShots = new Set()
     pendingSlam = null
     raf = requestAnimationFrame(frame)
   }

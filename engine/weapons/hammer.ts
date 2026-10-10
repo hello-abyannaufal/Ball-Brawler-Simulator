@@ -1,7 +1,8 @@
 import type { WeaponDefinition } from './types'
 import { weaponRegistry } from './registry'
+import { heavyBlow } from './behaviors/heavyBlow'
 
-/** Hammer: held, heaviest weight among starters, cannot be parried (Req 10.11, 10.12). */
+/** Hammer: heaviest weight among starters, so it is never parried by a lighter weapon. */
 export const hammer: WeaponDefinition = {
   id: 'hammer',
   name: 'Hammer',
@@ -12,12 +13,12 @@ export const hammer: WeaponDefinition = {
   weight: 30, // heaviest starter
   hitCooldown: 1100,
   hitbox: { shape: 'circle', radius: 16 }, // the head, at the tip
-  cannotBeParried: true,
-  launchSpeed: 540, // heavy blow: sends the target flying away
-  reboundOnHit: true, // solid head bounces off instead of passing through
-  wallSlam: { damage: 6, windowSteps: 45 }, // hit a wall within 0.75 s → +6
+  behaviors: [heavyBlow({
+    launchSpeed: 540, // sends the target flying away
+    reboundOnHit: true, // solid head bounces off instead of passing through
+    wallSlam: { damage: 6, windowSteps: 45 }, // hit a wall within 0.75 s → +6
+  })],
   spriteId: 'weapon:hammer',
-  iconId: 'icon:weapon:hammer',
   pivot: { x: 5, y: 16 },
   spriteReach: 26,
 }

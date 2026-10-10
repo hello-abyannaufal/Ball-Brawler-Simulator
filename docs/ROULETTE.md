@@ -97,7 +97,7 @@ SavedBall {
 ## 4. Cara menambah roda baru (mis. Trait)
 
 1. **Definisi + registry**: pastikan jenis baru punya registry (mis. `traitRegistry`) dengan
-   `ids()` dan `get(id)` (minimal `name`, opsional `spriteId`/`iconId`).
+   `ids()` dan `get(id)` (minimal `name`, opsional `spriteId`).
 2. **Jenis roda**: tambahkan ke `WheelKind` dan default `weights` di `stores/roulette.ts`:
    ```ts
    export type WheelKind = 'weapon' | 'trait'
@@ -126,8 +126,8 @@ Race  →  Weapon  →  Trait  →  Ability  →  (nama + Save)
 
 | Roda | Isi | Status |
 |---|---|---|
-| Race | Tubuh bola: HP, radius, speed, damageTaken, weaponSpin (`engine/races/`) | ✅ ada (Tier 1: Human, Elf, Orc) |
-| Weapon | Senjata (sword, spear, hammer, bow, shuriken, …) | ✅ ada |
+| Race | Tubuh bola: HP, radius, speed, damageTaken, weaponSpin (`engine/races/`) | ✅ ada (Tier 1: Human, Elf, Orc; Tier 2: Dwarf, Goblin, Giant) |
+| Weapon | Senjata (sword, spear, hammer, bow, scythe, …) | ✅ ada |
 | Trait | Efek **pasif** (mis. vampiric, regen, spike) | ⏳ belum ada sistemnya |
 | Ability | Skill **aktif** dengan cooldown (mis. dash, invisibility) | ⏳ belum ada sistemnya |
 
@@ -211,7 +211,8 @@ Baca seluruh dokumen ini sebelum mengubah kode.
 - Sistem skill lama sudah **dihapus** (lihat task 16.8); kode lamanya ada di commit
   `548a969` dan bisa dijadikan referensi pola hook (`onHit`, `onHurt`, `onTick`, …)
   untuk Trait.
-- Status effect (`engine/status.ts`) masih ada dan cocok untuk efek berdurasi Ability
-  (invisible, regen, dll.).
+- Status effect (`engine/status.ts`) cocok untuk efek berdurasi Trait/Ability. Pasang lewat
+  `applyStatus()`; debuff `slow`/`poison`/`stun` sudah ada, buff tinggal tambah definisi
+  (`polarity: 'buff'`) di registry yang sama.
 - Konvensi repo: commit message bahasa Inggris dengan conventional commits, stage file
   spesifik (bukan `git add .`), konfirmasi user sebelum `git push`.

@@ -4,17 +4,21 @@
  */
 
 /**
- * Ordered container/codec fallback list, WebM first (Req 14.2). The recorder
- * picks the first entry `MediaRecorder.isTypeSupported` accepts.
+ * Ordered container/codec fallback list, MP4 (H.264 + AAC) first so files can
+ * be uploaded straight to TikTok/Reels/Shorts; WebM only where MP4 recording is
+ * unavailable (e.g. Firefox). The recorder picks the first entry
+ * `MediaRecorder.isTypeSupported` accepts.
  */
 export const MIME_FALLBACKS: readonly string[] = [
+  'video/mp4;codecs=avc1.64002A,mp4a.40.2', // H.264 High@4.2: up to 1080p60
+  'video/mp4;codecs=avc1,mp4a.40.2',
+  'video/mp4;codecs=avc1',
+  'video/mp4',
   'video/webm;codecs=vp9,opus',
   'video/webm;codecs=vp8,opus',
   'video/webm;codecs=vp9',
   'video/webm;codecs=vp8',
   'video/webm',
-  'video/mp4;codecs=h264,aac',
-  'video/mp4',
 ]
 
 /**
@@ -36,6 +40,10 @@ export function pickMimeType(
   }
   return null
 }
+
+/** Video bitrate at 1080×1920, 60 fps; smaller canvases scale it down by area. */
+export const VIDEO_BITRATE = 12_000_000
+const MIN_VIDEO_BITRATE = 2_500_000
 
 export class RecordingUnsupportedError extends Error {
   constructor() {
@@ -79,7 +87,13 @@ export function createRecorder(
   }
 
   const chunks: Blob[] = []
-  const mr = new MediaRecorder(stream, { mimeType })
+  // Without a bitrate the browser picks a low default (~2.5 Mbps), and the
+  // encoder makes large flat areas (the letterbox) flicker at 1080p60.
+  const bitrate = Math.max(
+    MIN_VIDEO_BITRATE,
+    Math.round((VIDEO_BITRATE * canvas.width * canvas.height) / (1080 * 1920)),
+  )
+  const mr = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: bitrate })
   mr.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) chunks.push(e.data)
   }

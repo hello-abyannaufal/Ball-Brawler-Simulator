@@ -30,8 +30,6 @@ const C = {
   white: '#ffffff',
   ink: '#181425',
   purple: '#b55088',
-  slot: '#3a4466',
-  slotEdge: '#262b44',
 } as const
 
 /** Fill a crisp rectangle in integer pixels. */
@@ -79,62 +77,15 @@ const spearProc: ProceduralDraw = (ctx, w) => {
   px(ctx, 4, 5, w - 10, 2, C.wood) // shaft
   px(ctx, w - 6, 4, 4, 4, C.steel) // tip
 }
-/** Fallback if shuriken.png fails: 9×9 four-point shuriken, scaled to fit. */
-const SHURIKEN_9 = [
-  '....#....',
-  '...##....',
-  '...#L....',
-  '.#.LDL##.',
-  '##LDODL##',
-  '.##LDL.#.',
-  '....L#...',
-  '....##...',
-  '....#....',
-]
-const shurikenProc: ProceduralDraw = (ctx, w, h) => {
-  const k = Math.max(1, Math.floor(Math.min(w, h) / 9))
-  const ox = Math.floor((w - 9 * k) / 2)
-  const oy = Math.floor((h - 9 * k) / 2)
-  const col: Record<string, string> = { '#': C.steel, L: C.white, D: C.steelDark, O: C.ink }
-  SHURIKEN_9.forEach((row, y) => {
-    for (let x = 0; x < 9; x++) {
-      const c = col[row[x]!]
-      if (c) px(ctx, ox + x * k, oy + y * k, k, k, c)
-    }
-  })
-}
 const bowProc: ProceduralDraw = (ctx) => {
-  px(ctx, 18, 8, 2, 16, C.wood) // right-bulging limb
-  px(ctx, 16, 6, 2, 4, C.wood)
-  px(ctx, 16, 22, 2, 4, C.wood)
+  px(ctx, 18, 8, 2, 16, C.steel) // right-bulging metal limb
+  px(ctx, 16, 6, 2, 4, C.steelDark)
+  px(ctx, 16, 22, 2, 4, C.steelDark)
   px(ctx, 14, 10, 1, 12, C.white) // string on the left
 }
 
-// ---- Projectiles ----
-/** 12×5 arrow pointing RIGHT (+x): fletching, wooden shaft, steel head. */
-const arrowProc: ProceduralDraw = (ctx) => {
-  px(ctx, 0, 0, 2, 1, C.red) // fletching
-  px(ctx, 0, 4, 2, 1, C.red)
-  px(ctx, 1, 1, 2, 1, C.red)
-  px(ctx, 1, 3, 2, 1, C.red)
-  px(ctx, 0, 2, 9, 1, C.wood) // shaft
-  px(ctx, 9, 1, 1, 3, C.steelDark) // head
-  px(ctx, 10, 1, 1, 3, C.steel)
-  px(ctx, 11, 2, 1, 1, C.white) // tip
-}
-const blasterShotProc: ProceduralDraw = (ctx) => {
-  px(ctx, 2, 3, 4, 2, C.cyan)
-  px(ctx, 1, 3, 1, 2, C.blue)
-}
 
-// ---- Hit-flash: distinct by SHAPE (round / diamond) ----
-const hitContactProc: ProceduralDraw = (ctx, w, h) => {
-  ctx.fillStyle = C.white
-  for (let a = 0; a < 8; a++) {
-    const ang = (a / 8) * Math.PI * 2
-    px(ctx, Math.round(w / 2 + Math.cos(ang) * 8) - 1, Math.round(h / 2 + Math.sin(ang) * 8) - 1, 2, 2, C.white)
-  }
-}
+// ---- Hit-flash (projectile hits): concentric diamond ----
 const hitProjectileProc: ProceduralDraw = (ctx, w, h) => {
   const cx = w / 2
   const cy = h / 2
@@ -146,22 +97,103 @@ const hitProjectileProc: ProceduralDraw = (ctx, w, h) => {
   }
 }
 
-// ---- Generic icon fallback (badge variant reserved for skills, plain for weapons) ----
-function iconProc(color: string, badge: boolean): ProceduralDraw {
-  return (ctx, w, h) => {
-    if (badge) {
-      px(ctx, 1, 1, w - 2, h - 2, C.slotEdge)
-      px(ctx, 2, 2, w - 4, h - 4, C.slot)
-    }
-    px(ctx, 5, 5, w - 10, h - 10, color)
+/** A pixel map (one char per pixel, '.' transparent), rows starting at `top`. */
+function gridProc(colors: Record<string, string>, rows: string[], top = 0): ProceduralDraw {
+  return (ctx) => {
+    rows.forEach((row, y) => {
+      for (let x = 0; x < row.length; x++) {
+        const c = colors[row[x]!]
+        if (c) px(ctx, x, top + y, 1, 1, c)
+      }
+    })
   }
+}
+
+// Scythe: the same pixels as scythe.png.
+const scytheProc = gridProc({
+  K: C.ink, s: '#5a6988', d: C.steelDark, l: C.steel, W: C.white,
+  t: '#e4a672', w: C.wood, p: C.purple, k: C.woodDark, q: '#68386c',
+}, [
+  '.............KKKKKKKKKK.........',
+  '...........KKssssssssssKK.......',
+  '..........KssddddddddddssK......',
+  '.........KllllllllldddddssK.....',
+  '........KllWWWWWWWllldddddsK....',
+  '........KWWKKKKKKKWWWllddddsK...',
+  '.........KK.......KKWWlldddssK..',
+  '....................KKWlldddsK..',
+  '......................KWlldddsK.',
+  '.......................KWllddsK.',
+  '........................KKKKKsK.',
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKldKsK.',
+  'KttwttpppwttwttwttwttwttwKddKK..',
+  'KwwkwwqqqkwwkwwkwwkwwkwwkKddK...',
+  'KKKKKKKKKKKKKKKKKKKKKKKKKKdsK...',
+  '.........................KKKK...',
+], 4)
+
+// Revolver: the same pixels as revolver.png.
+const revolverProc = gridProc({
+  K: C.ink, W: C.white, l: C.steel, d: C.steelDark, s: '#5a6988',
+  w: C.wood, t: '#e4a672', k: C.woodDark,
+}, [
+  '.......KKK......................',
+  '.......KdKKKKKKKK...............',
+  '......KdddKllllllK.........K....',
+  '......KlllKddddddKKKKKKKKKKKKK..',
+  '......KdddKdsdsddKWWWWWWWWWWWK..',
+  '......KdddKddddddKlllllllllllK..',
+  '......KsssKdsdsddKdddddddddddK..',
+  '.....KwwwwKddddddKKKKKKKKKKKKK..',
+  '.....KtwwkKssssssK..............',
+  '.....KtwwkKKKKKKKK..............',
+  '....KtwwkK.Kd..K................',
+  '....KtwwkK..KKKK................',
+  '...KtwwkK.......................',
+  '...KtwwkK.......................',
+  '..KtwwkK........................',
+  '..KwwwkK........................',
+  '..KKKKKK........................',
+], 9)
+
+// ---- Projectiles, pointing RIGHT (+x); same pixels as their PNGs ----
+// Arrow (12×5): red fletching, wooden shaft, barbed steel head.
+const arrowProc = gridProc({ r: C.red, w: C.wood, d: C.steelDark, l: C.steel, W: C.white },
+  ['rr.......d..', '.rr......dl.', 'wwwwwwwwwllW', '.rr......dl.', 'rr.......d..'])
+// Bullet (6×3): brass casing, steel tip.
+const bulletProc = gridProc({ K: C.ink, Y: C.gold, l: C.steel }, ['.KKKK.', 'KYYYlK', '.KKKK.'])
+
+// ---- Status icons (8×8, drawn at 2× in the HUD); same art as the PNGs ----
+const STATUS_COLORS: Record<string, string> = {
+  K: C.ink, W: C.white, G: C.green, g: '#3e8948', B: C.blue, b: '#124e89',
+  C: C.cyan, y: '#fee761', Y: C.gold, o: '#f77622',
+}
+const poisonProc = gridProc(STATUS_COLORS, ['...KK...', '..KGGK..', '..KGGK..', '.KGWGGK.', 'KGWGGGgK', 'KGGGGggK', '.KggggK.', '..KKKK..'])
+const slowProc = gridProc(STATUS_COLORS, ['KKKKKKKK', '.KbbbbK.', '..KBBK..', '...KK...', '...KK...', '..KbBK..', '.KBBBCK.', 'KKKKKKKK'])
+const stunProc = gridProc(STATUS_COLORS, ['...KK...', '..KyYK..', '.KKyYKK.', 'KyyWYYoK', 'KYyYYooK', '.KKYoKK.', '..KYoK..', '...KK...'])
+
+// ---- Race parts (ball pixels); same pixels as their PNGs ----
+// `S` / `s` are skin markers, recolored to the ball's fill (and its shade)
+// when the ball is baked: see RACE_SKIN in races.ts.
+const RACE_COLORS: Record<string, string> = {
+  K: C.ink, S: '#ff0044', s: '#f6757a', W: C.white, e: '#ead4aa', c: '#c28569',
+  L: C.steel, g: C.steelDark, Y: C.gold, T: '#e4a672', B: C.wood, b: C.woodDark,
+  o: '#f77622', O: '#be4a2f',
+}
+const RACE_PARTS: Record<string, string[]> = {
+  'human-hair': ['....K..K....', '...KBKKBK...', '..KBTBBTBKK.', '.KBTBBBBBBBK', 'KBBBBbBBBbBK', 'KbBbKbBKbKbK', '.KK..K..K.KK'],
+  'elf-ear': ['.....KK', '....KSK', '...KSSK', '..KSsSK', '.KSsSK.', 'KSsSK..', 'KSSK...', 'KKK....'],
+  'orc-tusks': ['K.........K', 'WK.......KW', 'eWK.....KWe', 'KeWK...KWeK', '.KceK.KecK.', '..KKK.KKK..'],
+  'dwarf-helm': ['K...........K', 'eK..KKKKK..Ke', 'ceKKLLLLgKKec', '.KcLLWLLggKK.', '..KLLLLLggK..', '.KYYYYYYYYoK.', '.KKKKKKKKKKK.'],
+  'dwarf-beard': ['KK.........KK', 'KoKKKKKKKKKoK', 'KooooooooooOK', 'KoooOooOoooOK', '.KooOooOooOK.', '.KOoooooooOK.', '..KOooOooOK..', '...KOOOOOK...', '....KKKKK....'],
+  'goblin-ear': ['.......KK', '....KKKSK', '..KKSSSSK', 'KKSSssSSK', 'KSSsssSK.', 'KSSssSSK.', 'KSSSSKK..', 'KSSKK....', 'KKK......'],
+  'giant-horn': ['...KKKKK...', '..KeeeeecK.', '.KeWWeeeecK', 'KeWeKKKKecK', 'KeeK...KccK', 'KeeK...KcK.', 'KeeK....K..', 'KceK.......', 'KccK.......', 'KccK.......'],
 }
 
 const SIZE_ENTITY = 32
 const SIZE_SPEAR_W = 48
 const SIZE_SPEAR_H = 12
-const SIZE_PROJ = 8
-const SIZE_ICON = 16
+const SIZE_STATUS = 8
 
 /** The full sprite registry. */
 export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
@@ -169,33 +201,47 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'weapon:sword': { kind: 'image', src: '/sprites/weapons/sword.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:hammer': { kind: 'image', src: '/sprites/weapons/hammer.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:spear': { kind: 'image', src: '/sprites/weapons/spear.png', width: SIZE_SPEAR_W, height: SIZE_SPEAR_H },
-  'weapon:shuriken': { kind: 'image', src: '/sprites/weapons/shuriken.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:bow': { kind: 'image', src: '/sprites/weapons/bow.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:scythe': { kind: 'image', src: '/sprites/weapons/scythe.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
+  'weapon:revolver': { kind: 'image', src: '/sprites/weapons/revolver.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
 
-  // Projectiles — procedural until PNGs exist.
-  'projectile:arrow': { kind: 'procedural', width: 12, height: 5, draw: arrowProc },
-  'projectile:blaster-shot': { kind: 'procedural', width: SIZE_PROJ, height: SIZE_PROJ, draw: blasterShotProc },
+  // Projectiles.
+  'projectile:arrow': { kind: 'image', src: '/sprites/projectiles/arrow.png', width: 12, height: 5 },
+  'projectile:bullet': { kind: 'image', src: '/sprites/projectiles/bullet.png', width: 6, height: 3 },
+  'projectile:arrow:proc': { kind: 'procedural', width: 12, height: 5, draw: arrowProc },
+  'projectile:bullet:proc': { kind: 'procedural', width: 6, height: 3, draw: bulletProc },
 
   // Hit-flash FX.
-  'fx:hit-contact': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hitContactProc },
   'fx:hit-projectile': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hitProjectileProc },
 
-  // Weapon icons (plain silhouette).
-  'icon:weapon:sword': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
-  'icon:weapon:hammer': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
-  'icon:weapon:spear': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
-  'icon:weapon:shuriken': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: shurikenProc },
-  'icon:weapon:bow': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.wood, false) },
-  'icon:weapon:scythe': { kind: 'procedural', width: SIZE_ICON, height: SIZE_ICON, draw: iconProc(C.steel, false) },
+  // Status icons (HUD). Keyed by status id: `status:<id>`.
+  'status:poison': { kind: 'image', src: '/sprites/icons/status/poison.png', width: SIZE_STATUS, height: SIZE_STATUS },
+  'status:slow': { kind: 'image', src: '/sprites/icons/status/slow.png', width: SIZE_STATUS, height: SIZE_STATUS },
+  'status:stun': { kind: 'image', src: '/sprites/icons/status/stun.png', width: SIZE_STATUS, height: SIZE_STATUS },
+  'status:poison:proc': { kind: 'procedural', width: SIZE_STATUS, height: SIZE_STATUS, draw: poisonProc },
+  'status:slow:proc': { kind: 'procedural', width: SIZE_STATUS, height: SIZE_STATUS, draw: slowProc },
+  'status:stun:proc': { kind: 'procedural', width: SIZE_STATUS, height: SIZE_STATUS, draw: stunProc },
 
   // Weapon procedural fallbacks are also exposed under *:proc ids so the
   // renderer can prefer them if an image fails to load.
   'weapon:sword:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: swordProc },
   'weapon:hammer:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hammerProc },
-  'weapon:shuriken:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: shurikenProc },
   'weapon:spear:proc': { kind: 'procedural', width: SIZE_SPEAR_W, height: SIZE_SPEAR_H, draw: spearProc },
   'weapon:bow:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: bowProc },
+  'weapon:scythe:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: scytheProc },
+  'weapon:revolver:proc': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: revolverProc },
+}
+
+for (const [id, rows] of Object.entries(RACE_PARTS)) {
+  const width = rows[0]!.length
+  const height = rows.length
+  SPRITE_MANIFEST[`race:${id}`] = { kind: 'image', src: `/sprites/races/${id}.png`, width, height }
+  SPRITE_MANIFEST[`race:${id}:proc`] = { kind: 'procedural', width, height, draw: gridProc(RACE_COLORS, rows) }
+}
+
+// Race icons (roulette wheel): the race's ball on a neutral fill, upright.
+for (const id of ['human', 'elf', 'orc', 'dwarf', 'goblin', 'giant']) {
+  SPRITE_MANIFEST[`race-icon:${id}`] = { kind: 'image', src: `/sprites/icons/races/${id}.png`, width: SIZE_ENTITY, height: SIZE_ENTITY }
 }
 
 /** Resolve a spriteId to its source, or the placeholder when unknown. */

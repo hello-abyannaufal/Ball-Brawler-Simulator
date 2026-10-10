@@ -23,7 +23,9 @@ function makeId(): string {
 }
 
 export const useRecordingsStore = defineStore('recordings', {
-  state: (): RecordingsState => ({ items: [] }),
+  state(): RecordingsState {
+    return { items: [] }
+  },
 
   actions: {
     /**

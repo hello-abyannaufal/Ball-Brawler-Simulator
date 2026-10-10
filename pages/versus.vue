@@ -11,7 +11,8 @@ import { useSettingsStore } from '~/stores/settings'
 import { useLibraryStore } from '~/stores/library'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { raceRegistry } from '~/engine/races/registry'
-import { defaultBalls, hpBarFraction, placeForDuel } from '~/utils/duel'
+import { defaultBalls, placeForDuel } from '~/utils/duel'
+import { BALL_DEFAULT_FILL } from '~/utils/pixelBall'
 import { spriteSource } from '~/assets/sprites/manifest'
 import '~/engine/weapons/index' // populate the registry
 import '~/engine/races/index'
@@ -20,7 +21,7 @@ definePageMeta({ middleware: 'auth' })
 
 // Arena configured into a Duel_Config before running (Req 11.4).
 const arena = { width: 360, height: 360 } // 1:1
-// A fresh seed per Start; Rematch reuses it, so the duel replays identically.
+// A fresh seed per Start and per Rematch, so every duel starts from new positions.
 const seed = ref(0)
 
 interface Candidate {
@@ -103,8 +104,8 @@ let recStart = 0
 
 watch(soundEnabled, (v) => audio.setEnabled(v))
 
-// Weapon sprites carry transparent padding (the shuriken is ~14px in a 32px
-// canvas), so icons are cropped to their visible pixels and then scaled to fit.
+// Weapon sprites carry transparent padding, so icons are cropped to their
+// visible pixels and then scaled to fit.
 const croppedIcons = ref<Record<string, string>>({})
 
 function cropToContent(src: string): void {
@@ -143,7 +144,7 @@ function weaponIcon(c: BallConfig): string | null {
 }
 
 function ballFill(c: BallConfig): string {
-  return c.appearance?.type === 'color' ? c.appearance.value : '#c0cbdc'
+  return c.appearance?.type === 'color' ? c.appearance.value : BALL_DEFAULT_FILL
 }
 
 /** "Race · HP" line for a fighter card; the race supplies HP when set. */
@@ -173,39 +174,62 @@ function toggle(id: string): void {
   else selectedIds.value.push(id)
 }
 
-function startDuel(record = false): void {
-  if (!canStart.value) return
+/** A duel config with a fresh seed and the start positions it derives. */
+function newDuelConfig(): DuelConfig {
   seed.value = Math.floor(Math.random() * (SEED_MAX + 1)) // UI-side randomness; the engine stays seeded
-  recError.value = ''
-  const config: DuelConfig = {
+  return {
     engineVersion,
     seed: seed.value,
     // Random, well-separated starts derived from the seed (any pair, default or Library).
     ballConfigs: placeForDuel(selected.value.map((c) => c.config), arena, seed.value),
     arenaConfig: arena,
   }
-  duelNames.value = selected.value.map((c) => c.name)
+}
+
+let stopDuelWatchers: (() => void) | null = null
+
+/** Stop the running duel: its loop, its sounds and its HP/winner mirror. */
+function stopDuel(): void {
+  stopDuelWatchers?.()
+  stopDuelWatchers = null
   duel?.dispose()
+  duel = null
+}
+
+/** Back to the picker. The duel stops for real. A recording of a finished duel
+ *  is still saved by the pending winner timeout; one cut off mid-fight is dropped. */
+function backToPicker(): void {
+  const finished = winner.value !== undefined
+  stopDuel()
+  if (recorder && !finished) {
+    void recorder.stop()
+    recorder = null
+    autoRecording.value = false
+  }
+  winner.value = undefined
+  running.value = false
+}
+
+function startDuel(record = false): void {
+  if (!canStart.value) return
+  recError.value = ''
+  const config = newDuelConfig()
+  duelNames.value = selected.value.map((c) => c.name)
+  stopDuel()
   duel = useVersusDuel(canvasEl, config, seed.value, settings.simulationSpeed, {
     showHitboxes: showHitboxes.value,
     reducedMotion: prefersReducedMotion,
     names: duelNames.value,
+    onSound: (s) => audio.play(s),
   })
   // Mirror the shallowRefs into local reactive refs for the template.
-  watchEffect(() => {
+  const stopMirror = watchEffect(() => {
     hp.value = duel!.view.hp.value
     winner.value = duel!.view.winner.value
   })
-  // Play a synthesized sound per engine event (Req 14.5).
-  watch(
-    () => duel!.view.lastEvent.value,
-    (e) => {
-      if (!e) return
-      if (e.type === 'damage') audio.play('hit')
-      else if (e.type === 'weaponClash' || e.type === 'projectileBlocked' || e.type === 'projectileReflected') audio.play('clash')
-      else if (e.type === 'matchEnded') audio.play('win')
-    },
-  )
+  stopDuelWatchers = () => {
+    stopMirror()
+  }
   running.value = true
   duel.start()
 
@@ -235,10 +259,13 @@ function startAutoRecord(): void {
   recorder.start()
 }
 
-// Stop recording within 2s after a winner is determined, then save (Req 14.6).
+/** Recording keeps running this long after a winner is determined (time to
+ *  read the result card), then stops and saves. */
+const RECORDING_TAIL_MS = 5000
+
 watch(winner, (w) => {
   if (w === undefined || !recorder || !autoRecording.value) return
-  window.setTimeout(() => void finishRecording(), 1500)
+  window.setTimeout(() => void finishRecording(), RECORDING_TAIL_MS)
 })
 
 async function finishRecording(): Promise<void> {
@@ -259,12 +286,11 @@ async function finishRecording(): Promise<void> {
 }
 
 function rematch(): void {
-  duel?.rematch()
+  duel?.rematch(newDuelConfig())
 }
 
 onBeforeUnmount(() => {
-  duel?.dispose() // Req 11.11
-  duel = null
+  stopDuel() // Req 11.11
   void recorder?.stop()
   recorder = null
   audio.dispose()
@@ -297,7 +323,7 @@ onBeforeUnmount(() => {
                 class="absolute -left-2.5 -top-2.5 bg-edg-gold px-1.5 py-1.5 font-pixel text-[10px] text-edg-ink shadow-[0_0_0_4px_#181425]"
               >{{ slotLabel(b.key) }}</span>
               <span class="relative block h-16 w-24" aria-hidden="true">
-                <PixelBall :fill="ballFill(b.config)" class="absolute left-1 top-1 size-14" />
+                <PixelBall :fill="ballFill(b.config)" :race-id="b.config.raceId" class="absolute left-1 top-1 size-14" />
                 <img
                   v-if="weaponIcon(b.config)"
                   :src="weaponIcon(b.config)!"
@@ -331,7 +357,7 @@ onBeforeUnmount(() => {
             :class="i === 1 ? 'order-3' : ''"
           >
             <span class="font-pixel text-[10px]" :class="i === 0 ? 'text-[#0099db]' : 'text-edg-red'">P{{ i + 1 }}</span>
-            <PixelBall v-if="slot" :fill="ballFill(slot.config)" class="size-16" />
+            <PixelBall v-if="slot" :fill="ballFill(slot.config)" :race-id="slot.config.raceId" class="size-16" />
             <span v-else class="flex size-16 items-center justify-center font-pixel text-xl text-edg-mist" aria-hidden="true">?</span>
             <span class="max-w-full truncate font-pixel text-[10px]">{{ slot?.name ?? '—' }}</span>
           </div>
@@ -381,34 +407,6 @@ onBeforeUnmount(() => {
     </div>
 
     <section v-else class="mx-auto flex w-full max-w-[760px] flex-col items-center gap-6">
-      <div class="flex w-full items-center gap-3">
-        <template v-for="(h, i) in hp" :key="h.id">
-          <span v-if="i === 1" class="font-pixel text-sm text-edg-red [text-shadow:3px_3px_0_#181425]">VS</span>
-          <div
-            class="px-panel flex min-w-0 flex-1 flex-col gap-2 px-3.5 pb-3.5 pt-3"
-            :class="i === 1 ? 'items-end text-right' : ''"
-          >
-            <span class="max-w-full truncate font-pixel text-[10px] uppercase">{{ duelNames[i] ?? `Ball ${h.id}` }}</span>
-            <div
-              class="flex h-4 w-full bg-edg-ink p-1"
-              :class="i === 1 ? 'justify-end' : ''"
-              role="meter"
-              :aria-label="`${duelNames[i] ?? `Ball ${h.id}`} HP`"
-              aria-valuemin="0"
-              :aria-valuemax="h.maxHp"
-              :aria-valuenow="h.hp"
-            >
-              <div
-                class="h-2"
-                :class="hpBarFraction(h.hp, h.maxHp) < 0.35 ? 'bg-edg-red' : 'bg-edg-green'"
-                :style="{ width: `${hpBarFraction(h.hp, h.maxHp) * 100}%` }"
-              />
-            </div>
-            <span class="text-xl leading-none text-edg-fog">{{ Math.max(0, Math.ceil(h.hp)) }} / {{ h.maxHp }}</span>
-          </div>
-        </template>
-      </div>
-
       <p v-if="recError" role="alert" class="bg-edg-ink px-3 py-2 text-[22px] text-edg-sun">
         {{ recError }}
       </p>
@@ -433,19 +431,10 @@ onBeforeUnmount(() => {
         />
       </div>
 
-      <div
-        v-if="winner !== undefined"
-        role="status"
-        class="mt-4 flex w-full max-w-[480px] flex-col items-center gap-2.5 bg-edg-ink px-3 py-[18px] shadow-[0_-4px_0_#feae34,0_4px_0_#feae34]"
-      >
-        <template v-if="winner === null">
-          <span class="font-pixel text-[clamp(20px,3vh,28px)] text-edg-gold [text-shadow:3px_3px_0_#733e39]">DRAW</span>
-        </template>
-        <template v-else>
-          <span class="font-pixel text-xs text-edg-sand">Winner:</span>
-          <span class="font-pixel text-[clamp(20px,3vh,28px)] uppercase text-edg-gold [text-shadow:3px_3px_0_#733e39]">{{ winnerName }}</span>
-        </template>
-      </div>
+      <!-- The result is drawn on the canvas (so it is recorded); announce it too. -->
+      <p v-if="winner !== undefined" role="status" class="sr-only">
+        {{ winner === null ? 'Draw' : `Winner: ${winnerName}` }}
+      </p>
 
       <div class="mt-3 flex w-full max-w-[480px] flex-wrap gap-5">
         <button
@@ -458,7 +447,7 @@ onBeforeUnmount(() => {
         <button
           type="button"
           class="px-btn-slate h-14 flex-[1_1_180px] font-pixel text-sm"
-          @click="running = false"
+          @click="backToPicker"
         >
           BACK
         </button>

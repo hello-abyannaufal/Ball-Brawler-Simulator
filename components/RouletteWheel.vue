@@ -13,6 +13,7 @@ export interface WheelSlice {
   weight: number // > 0 (zero-weight entries should not be passed)
   color: string // #rrggbb
   spriteId?: string // sprite drawn on the slice (native size, pointing outward)
+  spriteUp?: boolean // the sprite's top points outward (weapons point right)
 }
 
 const props = defineProps<{ slices: WheelSlice[] }>()
@@ -96,7 +97,7 @@ function draw(): void {
     if (span < 0.07) return // too thin to fit an icon
     const a = ((b[k]! + b[k + 1]!) / 2) * TAU + rotation
     const rr = (R - RIM) * 0.6
-    drawSprite(ctx, s.spriteId, C + Math.sin(a) * rr, C - Math.cos(a) * rr, 1, a - Math.PI / 2)
+    drawSprite(ctx, s.spriteId, C + Math.sin(a) * rr, C - Math.cos(a) * rr, 1, s.spriteUp ? a : a - Math.PI / 2)
   })
 
   drawPointer(ctx)

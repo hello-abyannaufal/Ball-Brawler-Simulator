@@ -140,7 +140,7 @@ async function importJson(ev: Event): Promise<void> {
               class="px-panel flex items-center gap-3.5 px-3 pb-3.5 pt-3"
             >
               <div class="relative h-16 w-[88px] shrink-0 bg-edg-night shadow-[inset_0_4px_0_#181425]" aria-hidden="true">
-                <PixelBall :fill="ballColor(ball)" class="absolute left-1.5 top-1.5 size-[52px]" />
+                <PixelBall :fill="ballColor(ball)" :race-id="ball.config.raceId" class="absolute left-1.5 top-1.5 size-[52px]" />
                 <img
                   v-if="weaponSprite(ball)"
                   :src="weaponSprite(ball)!"
