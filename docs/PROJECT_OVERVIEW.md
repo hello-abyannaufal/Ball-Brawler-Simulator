@@ -220,6 +220,8 @@ Race (✅ ada)  →  Weapon (✅ ada)  →  Trait (⏳)  →  Ability (⏳)  →
 
 ### 4.3 Ide lanjutan (belum dijadwalkan)
 
+- **Aura**: tampilan visual status aktif (buff/debuff/trait seperti berserk) yang memancar
+  dari bola atau senjata. Draft & pertanyaan terbuka di `docs/AURA.md`.
 - Roulette: tombol Back, ringkasan sebelum Save, preset rarity, roda appearance, animasi hasil.
 - Simpan snapshot bobot roda bersama bola agar seed bisa di-replay persis.
 - Damage source baru yang sudah disiapkan union-nya: `area`, `dot`, `environment`, `beam`, `summon`, `reflect`.
@@ -235,6 +237,7 @@ Race (✅ ada)  →  Weapon (✅ ada)  →  Trait (⏳)  →  Ability (⏳)  →
 | `README.md` | Setup lokal, arsitektur, cara extend (weapon, damage source, trait/ability), determinism, roles. |
 | `engine/README.md` | Detail engine. |
 | `docs/ROULETTE.md` | Fitur Roulette & rencana Trait/Ability (bahasa Indonesia). |
+| `docs/AURA.md` | Draft konsep Aura (visual status buff/debuff), masih dibahas. |
 | `docs/ASSETS_PLAN.md` | Katalog aset pixel-art (ukuran, pivot, hitbox, prompt). |
 
 ### Konvensi kerja
