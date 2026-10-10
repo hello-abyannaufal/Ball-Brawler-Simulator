@@ -56,7 +56,9 @@ export function sanitizeSettings(raw: unknown): SettingsState {
 }
 
 export const useSettingsStore = defineStore('settings', {
-  state: (): SettingsState => defaultSettings(),
+  state(): SettingsState {
+    return defaultSettings()
+  },
 
   actions: {
     /** Pick an aspect ratio and apply its preset resolution. */
