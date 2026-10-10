@@ -82,8 +82,7 @@ that copy holds the exact same pixel map, so the art can be regenerated from it.
 | Weapon procedural fallbacks | — | 🧩 Code | `weapon:<id>:proc`; simple shapes for sword, hammer, spear, bow; scythe is an exact pixel copy of its PNG |
 | Status icons (poison, slow, stun) | 8×8, drawn 2× | ✅ PNG | `public/sprites/icons/status/`, id `status:<status id>`; in-frame HUD |
 | Status icons (freeze, frozen) | 8×8 | ⏳ Planned | with the Freeze status |
-| Arrow projectile | 12×5, drawn 2× | 🧩 Code | `projectile:arrow`; pivot on the tip, where the hit circle is |
-| Bullet projectile | 6×3, drawn 2× | 🧩 Code | `projectile:bullet` (Revolver); brass casing, steel tip, pivot on the tip |
+| Projectiles (arrow, bullet) | 12×5 / 6×3, drawn 2× | ✅ PNG | `public/sprites/projectiles/`; pivot on the tip, where the hit circle is; exact-copy fallbacks |
 | Hit flash (projectile) | 32×32 | 🧩 Code | `fx:hit-projectile`, concentric diamond; only projectile hits flash |
 | Blood burst, sparks, clash flash | particles | 🧩 Code | `useVersusDuel.ts`, render-only |
 | Shockwave (wall slam gray, parry white) | ring | 🧩 Code | `useVersusDuel.ts`, render-only |
@@ -105,6 +104,7 @@ UI panels and buttons are plain CSS (`.px-panel`, `.px-btn-*` in
 ```
 public/sprites/
   weapons/        sword.png hammer.png spear.png bow.png scythe.png   ✅
+  projectiles/    arrow.png bullet.png                                ✅
   icons/status/   poison.png slow.png stun.png                        ✅
                   freeze.png frozen.png                               ⏳
   icons/traits/   (Trait / Ability icons)                             ⏳
@@ -157,6 +157,15 @@ A new weapon needs: its PNG here, a `weapon:<id>` manifest entry (plus
 `weapon:<id>:proc` if wanted), and `spriteId`, `pivot`, `spriteReach` on its
 definition. A ranged weapon also sets `projectileSprite` (sprite id + pivot on
 the projectile's hit circle).
+
+### Projectiles ✅, transparent, forward = right, drawn at 2×
+
+Pivot on the tip (where the engine's hit circle is), set by the firing weapon's
+`projectileSprite`. Procedural fallbacks hold the same pixels.
+
+- **arrow.png** (12×5, Bow) — red fletching, wooden shaft, barbed steel head
+  (steel, not ink, so the barbs read on the dark floor). Pivot (11.5, 2.5).
+- **bullet.png** (6×3, Revolver) — brass casing with a steel tip. Pivot (4.5, 1.5).
 
 ### Status icons (8×8), transparent — HUD, drawn at 2×
 

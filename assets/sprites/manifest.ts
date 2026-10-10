@@ -84,18 +84,6 @@ const bowProc: ProceduralDraw = (ctx) => {
   px(ctx, 14, 10, 1, 12, C.white) // string on the left
 }
 
-// ---- Projectiles ----
-/** 12×5 arrow pointing RIGHT (+x): fletching, wooden shaft, steel head. */
-const arrowProc: ProceduralDraw = (ctx) => {
-  px(ctx, 0, 0, 2, 1, C.red) // fletching
-  px(ctx, 0, 4, 2, 1, C.red)
-  px(ctx, 1, 1, 2, 1, C.red)
-  px(ctx, 1, 3, 2, 1, C.red)
-  px(ctx, 0, 2, 9, 1, C.wood) // shaft
-  px(ctx, 9, 1, 1, 3, C.steelDark) // head
-  px(ctx, 10, 1, 1, 3, C.steel)
-  px(ctx, 11, 2, 1, 1, C.white) // tip
-}
 
 // ---- Hit-flash (projectile hits): concentric diamond ----
 const hitProjectileProc: ProceduralDraw = (ctx, w, h) => {
@@ -168,7 +156,11 @@ const revolverProc = gridProc({
   '..KKKKKK........................',
 ], 9)
 
-// Bullet (6×3) pointing RIGHT: brass casing, steel tip.
+// ---- Projectiles, pointing RIGHT (+x); same pixels as their PNGs ----
+// Arrow (12×5): red fletching, wooden shaft, barbed steel head.
+const arrowProc = gridProc({ r: C.red, w: C.wood, d: C.steelDark, l: C.steel, W: C.white },
+  ['rr.......d..', '.rr......dl.', 'wwwwwwwwwllW', '.rr......dl.', 'rr.......d..'])
+// Bullet (6×3): brass casing, steel tip.
 const bulletProc = gridProc({ K: C.ink, Y: C.gold, l: C.steel }, ['.KKKK.', 'KYYYlK', '.KKKK.'])
 
 // ---- Status icons (8×8, drawn at 2× in the HUD); same art as the PNGs ----
@@ -195,9 +187,11 @@ export const SPRITE_MANIFEST: Record<string, SpriteSource> = {
   'weapon:scythe': { kind: 'image', src: '/sprites/weapons/scythe.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
   'weapon:revolver': { kind: 'image', src: '/sprites/weapons/revolver.png', width: SIZE_ENTITY, height: SIZE_ENTITY },
 
-  // Projectiles — procedural until PNGs exist.
-  'projectile:arrow': { kind: 'procedural', width: 12, height: 5, draw: arrowProc },
-  'projectile:bullet': { kind: 'procedural', width: 6, height: 3, draw: bulletProc },
+  // Projectiles.
+  'projectile:arrow': { kind: 'image', src: '/sprites/projectiles/arrow.png', width: 12, height: 5 },
+  'projectile:bullet': { kind: 'image', src: '/sprites/projectiles/bullet.png', width: 6, height: 3 },
+  'projectile:arrow:proc': { kind: 'procedural', width: 12, height: 5, draw: arrowProc },
+  'projectile:bullet:proc': { kind: 'procedural', width: 6, height: 3, draw: bulletProc },
 
   // Hit-flash FX.
   'fx:hit-projectile': { kind: 'procedural', width: SIZE_ENTITY, height: SIZE_ENTITY, draw: hitProjectileProc },
