@@ -114,7 +114,7 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 - **Sword — Riposte** (`riposte`): setiap clash di mana sword *tidak* ter-disarm, riposte siap selama **60 step (1 s)**:
   hit berikutnya **×2**, bilah berputar **2.5×** lebih cepat menghadap lawan, dan proyektil
   lawan yang disentuh **dipantulkan** balik ke penembaknya.
-- **Hammer — Heavy blow** : `cannotBeParried`; hit melempar bola lawan dengan
+- **Hammer — Heavy blow** : terberat (30), jadi tidak pernah di-parry weapon lain; hit melempar bola lawan dengan
   `launchSpeed: 540`; `reboundOnHit` (spin berbalik setelah kena); **Wall slam**: jika bola
   yang terkena menabrak dinding dalam 45 step (0.75 s) → +6 damage.
   Visual (renderer saja): hit-stop lebih lama saat kontak (0.2 s), dan wall slam memunculkan
@@ -134,7 +134,7 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 
 - **Weapon clash** (weapon vs weapon) bukan damage; hasilnya satu dari `parry` / `bounce` /
   `disarm`, ditentukan oleh `weight` + RNG (`resolveClash` di `combat.ts`):
-  - selisih bobot < 10% → `parry` (kecuali ada weapon `cannotBeParried`);
+  - selisih bobot < 10% → `parry` (weapon sejenis selalu parry);
   - selain itu `disarm` dengan peluang = porsi bobot yang lebih berat, **dibatasi 60%**
     (`MAX_DISARM_CHANCE`), sisanya `bounce`.
   - Disarm = weapon yang kalah stun **18 step** (tidak bisa memberi damage).
@@ -157,7 +157,7 @@ Perubahan kecil bisa membalik seluruh matchup — ukur ulang setelah tiap peruba
    atur `spriteId`, `pivot`, `spriteReach` agar cocok dengan hitbox (cek *Show hitboxes*).
 4. Otomatis muncul di roda Roulette. Bump `engineVersion`.
 
-Field opsional yang tersedia: `projectile`, `cannotBeParried`, `launchSpeed`, `reboundOnHit`,
+Field opsional yang tersedia: `projectile`, `launchSpeed`, `reboundOnHit`,
 `wallSlam`, `riposte`, `reap`, `tipStrike`, `projectileBlockable` (lihat `engine/weapons/types.ts`).
 
 ---

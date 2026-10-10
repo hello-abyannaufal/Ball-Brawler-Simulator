@@ -118,7 +118,6 @@ export const MAX_DISARM_CHANCE = 0.6
  * The heavier weapon is favored (disarm chance = its weight share, capped at
  * MAX_DISARM_CHANCE): it tends to disarm the lighter one, the
  * lighter one tends to be bounced, and a parry occurs on a near-even match.
- * A weapon flagged `cannotBeParried` (Hammer) never yields a `parry`.
  */
 export function resolveClash(
   a: WeaponEntity,
@@ -133,11 +132,9 @@ export function resolveClash(
   const roll = rng.next()
   const heavierShare = Math.max(wa, wb) / total
 
-  const parryForbidden = a.def.cannotBeParried || b.def.cannotBeParried
-
-  // Near-even weights (small gap) favor a parry, unless forbidden.
+  // Near-even weights (small gap) favor a parry.
   const gap = Math.abs(wa - wb) / total
-  if (!parryForbidden && gap < 0.1) {
+  if (gap < 0.1) {
     return 'parry'
   }
 

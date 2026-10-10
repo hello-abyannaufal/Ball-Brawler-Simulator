@@ -25,7 +25,6 @@ export interface WeaponDefinition {
   readonly hitCooldown: number // ms, >= 0
   readonly hitbox: Hitbox
   readonly projectile?: ProjectileSettings // optional (Req 10.1, 10.10)
-  readonly cannotBeParried?: boolean // Hammer (Req 10.11, 10.12)
   /** Heavy blow: on a hit, launch the struck ball straight away at this speed
    *  (replaces its velocity). Without it a hit adds the base knockback impulse. */
   readonly launchSpeed?: number
