@@ -63,6 +63,9 @@ const STATUS_ICON_GAP = 4
 const STATUS_BLINK_STEPS = 30
 /** Below this HP fraction the HUD bar turns red. */
 const HP_LOW = 0.35
+/** Winner card background opacity: the arena (e.g. a ball dying mid-arena)
+ *  shows through; the text stays opaque. */
+const WINNER_CARD_ALPHA = 0.55
 
 /** Hit-stop: real-time seconds the simulation freezes after a damage event.
  *  Render-only (the engine just isn't stepped), so determinism is unaffected. */
@@ -114,6 +117,21 @@ const DEFLECT_TURN = Math.PI / 5 // veer toward the spin direction (36°)
 const DEFLECT_SPIN = 30 // rad/s tumble, in the blade's spin direction
 const DEFLECT_DRAG = 5
 
+/** Death: the losing ball freezes and blinks white in slow motion, then
+ *  shatters into its own pixels while its weapon tumbles away. Render-only.
+ *  Times are real seconds. */
+const DEATH_BLINK = 0.45 // blinking, before the shatter
+const DEATH_BLINK_PERIOD = 0.15 // one white + one normal phase
+const DEATH_SLOWMO = 0.3 // × sim and effect time while it blinks
+const SHATTER_LIFE = 0.8
+const SHATTER_SPEED = 170 // px/s for a pixel on the rim
+const SHATTER_AWAY = 70 // px/s added away from the opponent
+const DROPPED_LIFE = 1 // the dead ball's weapon tumbling away
+const DROPPED_SPEED = 60
+const DROPPED_SPIN = 9 // rad/s
+/** The winner card waits for the death to play out. */
+const WINNER_CARD_DELAY = 1.3
+
 /** Per-source hit-flash (Req 16.5, 16.6): a 32×32 pixel sprite at the impact,
  *  shaped differently per source (projectile = cross burst). Weapon hits have
  *  none: their blood burst is the feedback. */
@@ -155,6 +173,16 @@ interface Deflected {
   spin: number // rad/s
   life: number // seconds remaining
   spriteId: string
+  scale: number
+}
+
+/** A dead ball: blinking at its death spot until it shatters. */
+interface Dying {
+  x: number
+  y: number
+  sprite: HTMLCanvasElement // the ball as drawn (with race parts), in ball pixels
+  away: number // angle away from the opponent
+  t: number // real seconds since death
 }
 
 interface HitFlash {
@@ -207,6 +235,9 @@ export function useVersusDuel(
   let hitFlashes: HitFlash[] = []
   let shockwaves: Shockwave[] = []
   let deflected: Deflected[] = []
+  let dying: Dying[] = []
+  let endedFor = 0 // real seconds since the duel ended
+  const whiteSprites = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>()
   // Set by a `wallSlam` event; the damage event that follows uses its point.
   let pendingSlam: { ballId: EntityId; x: number; y: number } | null = null
   // Entity state before the latest step, for render interpolation.
@@ -238,6 +269,8 @@ export function useVersusDuel(
           const heavy = !slam && e.source.tag === 'weapon' && isHeavyHit(e.attackerId, e.targetId)
           hitStop = heavy ? HEAVY_HIT_STOP : slam || crit ? HIT_STOP * 1.5 : HIT_STOP
           spawnBlood(e.targetId, e.attackerId, crit ? e.amount * 2 : e.amount, slam ?? undefined)
+        } else if (e.type === 'ballDied') {
+          if (!reduced) startDeath(e.ballId)
         } else if (e.type === 'projectileBlocked' || e.type === 'projectilesCollided') {
           if (reduced) return
           spawnSparksAt(e.x, e.y, SPARK_COUNT.parry)
@@ -411,7 +444,98 @@ export function useVersusDuel(
       spin: dir * DEFLECT_SPIN,
       life: DEFLECT_LIFE,
       spriteId,
+      scale: 2,
     })
+  }
+
+  /** The dead ball freezes where it died; its weapons fall off and tumble away. */
+  function startDeath(ballId: EntityId): void {
+    const b = engine?.world.ballById(ballId)
+    if (!b) return
+    const foe = engine!.world.entities.find((e): e is Ball => e.kind === 'ball' && e.alive && e.id !== ballId)
+    const away = foe
+      ? Math.atan2(b.position.y - foe.position.y, b.position.x - foe.position.x)
+      : Math.random() * Math.PI * 2
+    dying.push({ x: b.position.x, y: b.position.y, sprite: ballCanvas(b), away, t: 0 })
+    for (const w of engine!.world.entities) {
+      if (w.kind !== 'weapon' || w.ownerId !== ballId || !w.def.spriteId) continue
+      const a = away + (Math.random() - 0.5) * Math.PI * 0.8
+      const dir = Math.sign(w.angularSpeed) || 1
+      deflected.push({
+        x: w.position.x,
+        y: w.position.y,
+        vx: Math.cos(a) * DROPPED_SPEED,
+        vy: Math.sin(a) * DROPPED_SPEED,
+        angle: w.angle,
+        spin: dir * DROPPED_SPIN,
+        life: DROPPED_LIFE,
+        spriteId: w.def.spriteId,
+        scale: w.def.spriteReach ? w.def.length / w.def.spriteReach : 2,
+      })
+    }
+  }
+
+  /** Advance dead balls; one that has blinked long enough shatters. */
+  function updateDying(dt: number): void {
+    for (const d of dying) {
+      d.t += dt
+      if (d.t >= DEATH_BLINK) shatter(d)
+    }
+    dying = dying.filter((d) => d.t < DEATH_BLINK)
+  }
+
+  /** Every pixel of the ball becomes a chunk flying out from its center,
+   *  faster at the rim, pushed away from the opponent. */
+  function shatter(d: Dying): void {
+    const { width: w, height: h } = d.sprite
+    const data = d.sprite.getContext('2d')!.getImageData(0, 0, w, h).data
+    const half = (w * BALL_PIXEL) / 2
+    for (let py = 0; py < h; py++) {
+      for (let px = 0; px < w; px++) {
+        const i = (py * w + px) * 4
+        if (data[i + 3] === 0) continue
+        const ox = (px + 0.5) * BALL_PIXEL - half
+        const oy = (py + 0.5) * BALL_PIXEL - half
+        const out = Math.atan2(oy, ox)
+        const speed = SHATTER_SPEED * (0.3 + Math.min(1, Math.hypot(ox, oy) / half)) * (0.6 + Math.random() * 0.6)
+        const life = SHATTER_LIFE * (0.6 + Math.random() * 0.4)
+        particles.push({
+          x: d.x + ox,
+          y: d.y + oy,
+          vx: Math.cos(out) * speed + Math.cos(d.away) * SHATTER_AWAY,
+          vy: Math.sin(out) * speed + Math.sin(d.away) * SHATTER_AWAY,
+          life,
+          maxLife: life,
+          size: BALL_PIXEL,
+          color: `rgb(${data[i]}, ${data[i + 1]}, ${data[i + 2]})`,
+          streak: false,
+        })
+      }
+    }
+  }
+
+  /** The dead ball at its death spot, white on every other blink phase. */
+  function drawDying(ctx: CanvasRenderingContext2D): void {
+    for (const d of dying) {
+      const white = Math.floor(d.t / (DEATH_BLINK_PERIOD / 2)) % 2 === 0
+      drawBallCanvas(ctx, white ? whiteSprite(d.sprite) : d.sprite, d.x, d.y)
+    }
+  }
+
+  /** A solid white silhouette of a ball sprite, cached per sprite. */
+  function whiteSprite(src: HTMLCanvasElement): HTMLCanvasElement {
+    const cached = whiteSprites.get(src)
+    if (cached) return cached
+    const c = document.createElement('canvas')
+    c.width = src.width
+    c.height = src.height
+    const g = c.getContext('2d')!
+    g.drawImage(src, 0, 0)
+    g.globalCompositeOperation = 'source-in' // keep alpha, replace color
+    g.fillStyle = '#ffffff'
+    g.fillRect(0, 0, c.width, c.height)
+    whiteSprites.set(src, c)
+    return c
   }
 
   function updateParticles(dt: number): void {
@@ -444,7 +568,7 @@ export function useVersusDuel(
   function drawDeflected(ctx: CanvasRenderingContext2D): void {
     for (const d of deflected) {
       ctx.globalAlpha = Math.min(1, d.life / (DEFLECT_LIFE * DEFLECT_FADE))
-      drawSprite(ctx, d.spriteId, d.x, d.y, 2, d.angle)
+      drawSprite(ctx, d.spriteId, d.x, d.y, d.scale, d.angle)
     }
     ctx.globalAlpha = 1
   }
@@ -582,19 +706,21 @@ export function useVersusDuel(
   /** The fighter picker's pixel-art ball with its race's parts, drawn at the
    *  weapon sprites' pixel size so ball and weapon match. */
   function drawBall(ctx: CanvasRenderingContext2D, b: Ball): void {
+    drawBallCanvas(ctx, ballCanvas(b), b.position.x, b.position.y)
+  }
+
+  function ballCanvas(b: Ball): HTMLCanvasElement {
     const config = findConfig(b.id)
     const app = config?.appearance
     const fill = app?.type === 'color' ? app.value : BALL_DEFAULT_FILL // pattern/image handled later
     const cells = Math.max(4, Math.round((b.radius * 2) / BALL_PIXEL))
-    const { canvas } = ballSprite(cells, fill, config?.raceId)
-    const size = canvas.width * BALL_PIXEL
-    ctx.drawImage(
-      canvas,
-      Math.round(b.position.x - size / 2),
-      Math.round(b.position.y - size / 2),
-      size,
-      size,
-    )
+    return ballSprite(cells, fill, config?.raceId).canvas
+  }
+
+  /** A baked ball sprite centered on (x, y), at the ball pixel size. */
+  function drawBallCanvas(ctx: CanvasRenderingContext2D, sprite: HTMLCanvasElement, x: number, y: number): void {
+    const size = sprite.width * BALL_PIXEL
+    ctx.drawImage(sprite, Math.round(x - size / 2), Math.round(y - size / 2), size, size)
   }
 
   function findConfig(id: EntityId) {
@@ -753,6 +879,7 @@ export function useVersusDuel(
     for (const e of engine.world.entities) {
       if (e.kind === 'ball' && e.alive) drawBall(ctx, e)
     }
+    drawDying(ctx)
     for (const e of engine.world.entities) {
       if (e.kind === 'weapon' && e.alive) drawWeapon(ctx, e)
       else if (e.kind === 'projectile' && e.alive) drawProjectile(ctx, e)
@@ -764,7 +891,7 @@ export function useVersusDuel(
     drawHpBars(ctx)
     if (opts?.showHitboxes) drawHitboxes(ctx)
 
-    if (engine.ended) drawWinner(ctx)
+    if (engine.ended && endedFor >= (reduced ? 0 : WINNER_CARD_DELAY)) drawWinner(ctx)
     // Above the arena when the letterbox has room (9:16, 4:5), else over its top.
     const above = (el.height - ah * scale) / 2 / scale >= HUD_H + HUD_GAP
     drawHud(ctx, above ? -HUD_H - HUD_GAP : HUD_GAP)
@@ -863,10 +990,13 @@ export function useVersusDuel(
     const cx = width / 2
     const top = Math.round((height - cardH) / 2)
     ctx.save()
+    ctx.globalAlpha = WINNER_CARD_ALPHA
     ctx.fillStyle = EDG.gold
-    ctx.fillRect(24, top - 4, cardW, cardH + 8)
+    ctx.fillRect(24, top - 4, cardW, 4)
+    ctx.fillRect(24, top + cardH, cardW, 4)
     ctx.fillStyle = EDG.wall
     ctx.fillRect(24, top, cardW, cardH)
+    ctx.globalAlpha = 1
     if (draw) {
       drawLabel(ctx, 'DRAW', cx, top + (cardH - size) / 2, size, EDG.gold, 'center', EDG.goldShadow)
     } else {
@@ -884,12 +1014,16 @@ export function useVersusDuel(
     lastTime = now
 
     updateHitFlashes(dt) // real time, so the flash lasts HIT_FLASH even in a hit-stop
+    // A dying ball slows the whole scene (sim and effects) while it blinks.
+    const timeScale = dying.length > 0 ? DEATH_SLOWMO : 1
+    updateDying(dt)
+    if (engine.ended) endedFor += dt
     if (hitStop > 0) {
       // Frozen on a hit: burn real time without advancing the simulation.
       hitStop -= dt
     } else {
       // Whole 1/60 s steps owed for elapsed real time × sim speed (Req 15.7).
-      acc += dt
+      acc += dt * timeScale
       let steps = stepsForElapsed(acc, speed)
       acc -= (steps * TIMESTEP) / speed
       // Clamp to avoid a spiral of death on tab resume (scaled for fast speeds).
@@ -905,7 +1039,7 @@ export function useVersusDuel(
       }
       if (hitStop > 0) acc = 0
       // Particles freeze with the hit-stop, then burst out when it ends.
-      updateParticles(dt)
+      updateParticles(dt * timeScale)
     }
 
     syncHp()
@@ -944,6 +1078,8 @@ export function useVersusDuel(
     hitFlashes = []
     shockwaves = []
     deflected = []
+    dying = []
+    endedFor = 0
     pendingSlam = null
     raf = requestAnimationFrame(frame)
   }

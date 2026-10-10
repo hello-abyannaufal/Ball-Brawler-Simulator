@@ -86,6 +86,7 @@ that copy holds the exact same pixel map, so the art can be regenerated from it.
 | Hit flash (projectile) | 32×32 | 🧩 Code | `fx:hit-projectile`, concentric diamond; only projectile hits flash |
 | Blood burst, sparks, clash flash | particles | 🧩 Code | `useVersusDuel.ts`, render-only |
 | Shockwave (wall slam gray, parry white) | ring | 🧩 Code | `useVersusDuel.ts`, render-only |
+| Death (white blink in slow-mo, then the ball shatters into its own pixels; its weapon tumbles away) | — | 🧩 Code | `useVersusDuel.ts`, render-only, off with reduced motion; the winner card waits 1.3 s for it |
 | Weapon trails (riposte gold, reap steel) | — | 🧩 Code | `useVersusDuel.ts`, per behavior id |
 | Race parts (human-hair, elf-ear, orc-tusks, dwarf-helm, dwarf-beard, goblin-ear, giant-horn) | 7×6 – 13×9, ball pixels | ✅ PNG | `public/sprites/races/`, id `race:<part>`, exact-copy `:proc` fallbacks; placed per race in `assets/sprites/races.ts` (anchor on the ball edge + pivot, back/front layer, mirrored pairs). `S`/`s` skin markers (`#ff0044` / `#f6757a`) are recolored to the ball's fill and shade, so the ball color stays free. Cosmetic only: no hitbox |
 | Race icons | 32×32 | ✅ PNG | `public/sprites/icons/races/`, id `race-icon:<race>`; the race's ball (16 cells) on a neutral steel fill; roulette wheel slices, drawn upright (`spriteUp`) |
