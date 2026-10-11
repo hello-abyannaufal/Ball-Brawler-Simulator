@@ -25,7 +25,9 @@ export interface BehaviorContext {
 /** How a landed hit plays out; `afterHit` hooks adjust it, then the engine applies it. */
 export interface HitResponse {
   cooldownSteps: number // starts at the weapon's full hit cooldown
-  knockback: 'push' | 'none' | { launchSpeed: number } // push: the base knockback impulse
+  /** push: the base knockback impulse; launch: replace the struck ball's
+   *  velocity, along `direction` (unit) or else straight away from the owner. */
+  knockback: 'push' | 'none' | { launchSpeed: number; direction?: Vec2 }
   /** If the struck ball hits a wall within `windowSteps`, it takes `damage`
    *  once more and gets `statusId`, if any. */
   wallSlam?: { damage: number; windowSteps: number; statusId?: string }

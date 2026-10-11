@@ -124,7 +124,7 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
   hit berikutnya **×2**, bilah berputar **2.5×** lebih cepat menghadap lawan, dan proyektil
   lawan yang disentuh **dipantulkan** balik ke penembaknya.
 - **Hammer — Heavy blow** (`heavyBlow`): terberat (30), jadi tidak pernah di-parry weapon lain; hit melempar bola lawan dengan
-  `launchSpeed: 540`; `reboundOnHit` (spin berbalik setelah kena); **Wall slam**: jika bola
+  `launchSpeed: 540` searah ayunan kepala hammer (tangen orbitnya, mengikuti arah spin); `reboundOnHit` (spin berbalik setelah kena); **Wall slam**: jika bola
   yang terkena menabrak dinding dalam 45 step (0.75 s) → +6 damage.
   Visual (renderer saja): hit-stop lebih lama saat kontak (0.2 s), dan wall slam memunculkan
   shockwave abu-abu dari titik kontak dinding yang melebar sambil menipis sampai hilang.

@@ -1,4 +1,4 @@
-import type { Ball } from './entities'
+import type { Ball, Vec2 } from './entities'
 import type { ArenaConfig } from './config'
 
 /**
@@ -127,6 +127,12 @@ export function launchAway(striker: Ball, struck: Ball, speed: number): void {
   }
   struck.velocity.x = (dx / dist) * speed
   struck.velocity.y = (dy / dist) * speed
+}
+
+/** Set `ball` flying along the unit direction `dir` at `speed`. */
+export function launchAlong(ball: Ball, dir: Vec2, speed: number): void {
+  ball.velocity.x = dir.x * speed
+  ball.velocity.y = dir.y * speed
 }
 
 /** Add an impulse of `magnitude` to `ball` along the direction (dx, dy). */

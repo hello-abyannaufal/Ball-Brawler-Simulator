@@ -6,7 +6,7 @@ import { initBehaviorState, type BehaviorContext, type HitResponse, type WeaponB
 import { World } from './world'
 import { createRng } from './rng'
 import { applyDamage } from './damage'
-import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback, launchAway, pushAlong } from './physics'
+import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback, launchAway, launchAlong, pushAlong } from './physics'
 import { runStatusEffects, recomputeStats, hasControl, applyStatus } from './status'
 import { CooldownTable } from './cooldown'
 import { weaponRegistry } from './weapons/registry'
@@ -356,7 +356,11 @@ export function createEngine(opts: EngineOptions): Engine {
           eachBehavior(w, (b, s) => b.afterHit?.(ctx, s, ball, hit))
           cooldowns.start(w.id, ball.id, hit.cooldownSteps)
           if (hit.knockback === 'push') applyKnockback(owner, ball, HIT_KNOCKBACK)
-          else if (hit.knockback !== 'none') launchAway(owner, ball, hit.knockback.launchSpeed)
+          else if (hit.knockback !== 'none') {
+            const { launchSpeed, direction } = hit.knockback
+            if (direction) launchAlong(ball, direction, launchSpeed)
+            else launchAway(owner, ball, launchSpeed)
+          }
           if (hit.wallSlam && ball.alive) {
             const { damage, windowSteps, statusId } = hit.wallSlam
             ball.slam = { attackerId: owner.id, damage, steps: windowSteps, ...(statusId ? { statusId } : {}) }
