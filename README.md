@@ -132,15 +132,20 @@ stores/ (Pinia, persisted to localStorage)       server/ (Nitro API)  ─► Pos
 3. Add a hit-flash sprite (`fx:hit-<tag>` in `assets/sprites/manifest.ts`, distinct by shape) and map it in `HIT_FLASH_SPRITE` in `composables/useVersusDuel.ts`.
 4. Bump `engineVersion` (see Determinism).
 
-### Add a Skill (Trait / Ability)
+### Add a Trait
 
-The original skill system was removed for now (code in commit `548a969`). It is planned to return as **Traits** (passive, on a ball or a weapon) and **Abilities** (active, with a cooldown). Until then:
+A ball has at most one **Trait** (passive, always on; `BallConfig.traitId`, resolved in `createEngine`). Traits live in `engine/traits/` as data: a `TraitDefinition` sets the effect fields it uses (`lifesteal`, `thorns`, `contactDamage`), and the engine applies them in `traitsAfterHit` / `applySpikeContacts` (`engine/engine.ts`).
 
-1. Agree the design first (targets, slots, compatibility, Ability triggers) — see `docs/ROULETTE.md` §5.
-2. Add the definitions + registry under `engine/` (the old `engine/skills/registry.ts` + hook calls in `engine.ts` are the reference pattern; keep hooks deterministic).
-3. Add a field to `BallConfig` and resolve it in `createEngine`.
-4. Add a roulette step: a `WheelKind` in `stores/roulette.ts` and an entry in `STEPS` in `pages/roulette.vue`; map the pick in `saveBall()`.
-5. Bump `engineVersion`.
+1. Add `engine/traits/<id>.ts` registering a `TraitDefinition`, and export it from `engine/traits/index.ts`. A new kind of effect needs a new optional field (validated in `TraitRegistry`) and its hook in `engine.ts`.
+2. Give it a look in the renderer if it needs one: a weapon aura color in `WEAPON_AURA` (`composables/useVersusDuel.ts`), or a ball look like `isSpiked` (`composables/useBallSprite.ts`).
+3. Check its balance: `npm run sim -- --axes weapon,trait`.
+4. Bump `engineVersion`.
+
+The Roulette `Trait` wheel lists every registered trait automatically.
+
+### Add an Ability
+
+Not built yet. **Abilities** are active, with a cooldown; one per ball. Agree the design first (especially the deterministic trigger), see `docs/ROULETTE.md` §5. The old skill system (commit `548a969`) shows a hook pattern.
 
 ## Determinism
 

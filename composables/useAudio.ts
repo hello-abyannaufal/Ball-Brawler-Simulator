@@ -15,6 +15,8 @@ export type SoundEvent =
   | 'hitCrit' // riposte, spear tip
   | 'hitProjectile'
   | 'hitDot' // poison tick
+  | 'spike' // Spike trait: thorns or body contact
+  | 'drain' // Vampire trait: lifesteal heal
   | 'slam' // wall slam
   | 'parry' | 'bounce' | 'disarm' // weapon clash outcomes
   | 'deflect' // projectile blocked / projectiles collided
@@ -176,6 +178,14 @@ export function useAudio(initialEnabled = true): AudioLayer {
         break
       case 'hitDot': // a soft bubble pop
         tone('triangle', 320 * p, 240 * p, t, 0.05, 0.18)
+        break
+      case 'spike': // a sharp metallic prick
+        noise(t, 0.03, 0.35, { filter: 'highpass', freq: 5000 })
+        tone('square', 1800 * p, 900 * p, t, 0.04, 0.12)
+        break
+      case 'drain': // a rising slurp
+        tone('triangle', 260 * p, 640 * p, t, 0.14, 0.16)
+        tone('triangle', 390 * p, 960 * p, t + 0.04, 0.1, 0.08)
         break
       case 'slam': // boom against the wall
         noise(t, 0.4, 1, { filter: 'lowpass', freq: 700 * p, freqEnd: 60 })

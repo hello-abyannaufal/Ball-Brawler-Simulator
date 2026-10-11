@@ -17,6 +17,8 @@ export type EngineEvent =
       outcome: 'bounce' | 'parry' | 'disarm'
     }
   | { type: 'ballDied'; ballId: EntityId }
+  /** A ball regained HP; `fromId` is the ball it was drained from (lifesteal). */
+  | { type: 'heal'; ballId: EntityId; fromId: EntityId | ''; amount: number }
   /** A riposting blade sent a projectile back at its shooter from (x, y). */
   | { type: 'projectileReflected'; projectileId: EntityId; weaponId: EntityId; x: number; y: number }
   /** An arrow was swatted out of the air by a weapon at (x, y). */

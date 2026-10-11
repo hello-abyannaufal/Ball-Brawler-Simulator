@@ -206,7 +206,7 @@ dengan mengecek definisi weapon lain.
 |---|---|---|
 | Tinggi | **Balance pass lanjutan** | Fokus ke matchup yang timpang & tidak tergantung seed, bukan hanya win rate rata-rata. |
 | Tinggi | **Balance race Tier 1**, lalu Tier 2 & tampilan race | Orc sedikit kuat, Elf lemah; sangat tergantung weapon (mis. Bow). |
-| Tinggi | **Trait & Ability** (pengganti sistem Skill lama) | Lihat 4.2. |
+| Tinggi | **Ability** (Trait sudah ada) | Lihat 4.2. |
 | Sedang | **UI Login / Register / Logout** | API `/api/auth/*` sudah ada; butuh PostgreSQL jalan. |
 | Sedang | **Home page** | Intro singkat + link ke Roulette & Versus. |
 | Sedang | **Final checkpoint** | Semua test lolos + cek manual roulette, FX versus, settings, recording. |
@@ -224,18 +224,25 @@ stat efektif dihitung ulang tiap step dari `ball.base` + modifier (`recomputeSta
 Debuff yang sudah ada: `slow` (modifier), `poison` (DoT, stack s/d 3), `stun` (control).
 Belum ada sumber yang memasangnya — weapon/Trait/Ability yang memakai status masih ⏳.
 
-Urutan roda Roulette yang dituju:
+**Trait ✅** (`engine/traits/`, `BallConfig.traitId`, maks. 1 per bola):
+
+| Trait | Efek | Tampilan |
+|---|---|---|
+| Vampire | heal 25% dari damage yang diberikan (weapon, proyektil, wall slam) | aura merah berdenyut di senjata & proyektil; darah terhisap + "+N" hijau |
+| Spike | 20% damage melee yang diterima dipantulkan (bukan proyektil); tabrakan badan = 1 damage (cooldown 0,5 s per lawan) | duri prosedural di pinggir bola; percikan baja saat kena |
+
+Angka dari `npm run sim -- --axes weapon,trait`: Spike ~58%, Vampire ~55%, tanpa trait ~35%.
+
+Urutan roda Roulette:
 
 ```
-Race (✅ ada)  →  Weapon (✅ ada)  →  Trait (⏳)  →  Ability (⏳)  →  nama + Save
+Race (✅ ada)  →  Weapon (✅ ada)  →  Trait (✅ ada)  →  Ability (⏳)  →  nama + Save
 ```
 
-**Keputusan yang harus ditanyakan ke user sebelum implementasi** (jangan diasumsikan):
+**Keputusan yang harus ditanyakan ke user sebelum implementasi Ability** (jangan diasumsikan):
 
-1. Target Trait: ball, weapon, atau keduanya?
-2. Kecocokan: kombinasi terlarang? (usulan: `isCompatible(picks)` per entri)
-3. Jumlah slot Trait/Ability per bola.
-4. Pemicu Ability: kapan dipakai secara otomatis & deterministik (mis. cooldown siap + lawan dalam jarak X).
+1. Kecocokan: kombinasi terlarang? (usulan: `isCompatible(picks)` per entri)
+2. Pemicu Ability: kapan dipakai secara otomatis & deterministik (mis. cooldown siap + lawan dalam jarak X).
 
 ### 4.3 Ide lanjutan (belum dijadwalkan)
 

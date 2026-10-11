@@ -6,13 +6,13 @@ export type DamageSourceTag =
   // active in phases 3-5
   | 'weapon'
   | 'projectile'
+  | 'reflect' // Spike trait: thorns and body contact
   // reserved, unimplemented (Req 6.5)
   | 'area'
   | 'dot'
   | 'environment'
   | 'beam'
   | 'summon'
-  | 'reflect'
 
 /** All Damage_Source tags, active and reserved (Req 6.4, 6.5). */
 export const DAMAGE_SOURCE_TAGS: readonly DamageSourceTag[] = [
@@ -122,4 +122,18 @@ export function applyDamage(
   }
 
   return { kind: 'applied', applied, killed, creditedAttacker }
+}
+
+/**
+ * Restores up to `amount` HP to a living ball, capped at its maxHp. Emits one
+ * `heal` event when HP actually rises; returns the HP gained (0 otherwise).
+ */
+export function heal(world: World, ballId: EntityId, amount: number, fromId: EntityId | ''): number {
+  const ball = world.ballById(ballId)
+  if (!ball || !ball.alive || !(amount > 0)) return 0
+  const gained = Math.min(amount, ball.maxHp - ball.hp)
+  if (gained <= 0) return 0
+  ball.hp += gained
+  world.emit({ type: 'heal', ballId, fromId, amount: gained })
+  return gained
 }

@@ -2,7 +2,7 @@ import { defineStore } from 'pinia'
 import { failSafeStorage } from '~/stores/example'
 
 /** Which wheel a weight belongs to. Add kinds here as new wheels arrive. */
-export type WheelKind = 'race' | 'weapon'
+export type WheelKind = 'race' | 'weapon' | 'trait'
 
 export const DEFAULT_WEIGHT = 10
 export const MAX_WEIGHT = 100
@@ -16,7 +16,7 @@ interface RouletteState {
 
 export const useRouletteStore = defineStore('roulette', {
   state: (): RouletteState => ({
-    weights: { race: {}, weapon: {} },
+    weights: { race: {}, weapon: {}, trait: {} },
     disabled: {},
   }),
 

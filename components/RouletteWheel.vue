@@ -13,7 +13,7 @@ export interface WheelSlice {
   weight: number // > 0 (zero-weight entries should not be passed)
   color: string // #rrggbb
   spriteId?: string // sprite drawn on the slice (native size, pointing outward)
-  spriteUp?: boolean // the sprite's top points outward (weapons point right)
+  label?: string // name written upright on the slice (instead of a sprite)
 }
 
 const props = defineProps<{ slices: WheelSlice[] }>()
@@ -25,11 +25,40 @@ const RIM = 2 // dark rim thickness
 const HUB = 10
 const INK: [number, number, number] = [24, 20, 37] // #181425
 const TAU = Math.PI * 2
+const FONT = '8px "Press Start 2P"'
+const LABEL_R = (R - RIM) * 0.58 // labels sit centered this far out
+const LABEL_MAX = 8 // chars (8px font)
 
 const canvas = ref<HTMLCanvasElement | null>(null)
 const { preloadAll, drawSprite } = useSprites()
 let rotation = 0 // radians, clockwise
 let raf = 0
+const labels = new Map<string, HTMLCanvasElement>()
+
+/**
+ * A label baked once: white pixel-font text with an ink outline, alpha snapped
+ * to on/off so it stays crisp on the pixelated canvas.
+ */
+function labelCanvas(text: string): HTMLCanvasElement {
+  const cached = labels.get(text)
+  if (cached) return cached
+  const c = document.createElement('canvas')
+  c.width = text.length * 8 + 2
+  c.height = 10
+  const g = c.getContext('2d')!
+  g.font = FONT
+  g.textBaseline = 'top'
+  g.fillStyle = '#181425'
+  for (const [dx, dy] of [[0, 1], [2, 1], [1, 0], [1, 2]]) g.fillText(text, dx!, dy!)
+  g.fillStyle = '#ffffff'
+  g.fillText(text, 1, 1)
+  const img = g.getImageData(0, 0, c.width, c.height)
+  for (let i = 3; i < img.data.length; i += 4) img.data[i] = img.data[i]! >= 128 ? 255 : 0
+  g.putImageData(img, 0, 0)
+  // Only cache with the real font; before it loads this is a fallback.
+  if (document.fonts?.check(FONT)) labels.set(text, c)
+  return c
+}
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = Number.parseInt(hex.slice(1), 16)
@@ -89,15 +118,26 @@ function draw(): void {
   ctx.clearRect(0, 0, SIZE, SIZE)
   ctx.putImageData(img, 0, 0)
 
-  // Icons ride the wheel at mid-slice, pointing outward.
+  // Icons ride the wheel at mid-slice, pointing outward; labels ride it too
+  // but stay upright, so they read (and stay crisp) while it spins.
   ctx.imageSmoothingEnabled = false
   props.slices.forEach((s, k) => {
-    if (!s.spriteId) return
     const span = b[k + 1]! - b[k]!
+    if (s.label) {
+      if (span * TAU * LABEL_R < 12) return // too thin for a line of text
+      const text = s.label.length > LABEL_MAX ? `${s.label.slice(0, LABEL_MAX - 1)}.` : s.label
+      const a = ((b[k]! + b[k + 1]!) / 2) * TAU + rotation
+      const img = labelCanvas(text.toUpperCase())
+      const x = Math.round(C + Math.sin(a) * LABEL_R - img.width / 2)
+      const y = Math.round(C - Math.cos(a) * LABEL_R - img.height / 2)
+      ctx.drawImage(img, x, y)
+      return
+    }
+    if (!s.spriteId) return
     if (span < 0.07) return // too thin to fit an icon
     const a = ((b[k]! + b[k + 1]!) / 2) * TAU + rotation
     const rr = (R - RIM) * 0.6
-    drawSprite(ctx, s.spriteId, C + Math.sin(a) * rr, C - Math.cos(a) * rr, 1, s.spriteUp ? a : a - Math.PI / 2)
+    drawSprite(ctx, s.spriteId, C + Math.sin(a) * rr, C - Math.cos(a) * rr, 1, a - Math.PI / 2) // weapons point right
   })
 
   drawPointer(ctx)
@@ -184,8 +224,8 @@ watch(() => props.slices, draw, { deep: true })
 
 onMounted(async () => {
   draw()
-  await preloadAll()
-  draw() // redraw once icon PNGs are in
+  await Promise.all([preloadAll(), document.fonts?.load(FONT).catch(() => undefined)])
+  draw() // redraw once icon PNGs and the label font are in
 })
 
 onBeforeUnmount(() => cancelAnimationFrame(raf))

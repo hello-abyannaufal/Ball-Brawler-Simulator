@@ -7,6 +7,16 @@ import { BALL_OUTLINE_COLOR, BALL_SHADE_STYLE, BALL_SHINE_STYLE } from '~/utils/
  *  (drawn at ~2×) so the 1-pixel outline stays readable while the ball moves. */
 export const BALL_PIXEL = 3
 
+/** Spike trait: room for the spikes past the rim, outline included. */
+const SPIKE_MARGIN = 4
+const SPIKE_FILL = '#c0cbdc'
+const SPIKE_SHADE = '#8b9bb4'
+
+/** Traits drawn as spikes on the ball. */
+export function isSpiked(traitId: string | undefined): boolean {
+  return traitId === 'spike'
+}
+
 /** A baked ball: `margin` ball pixels of room for race parts on every side. */
 export interface BallSprite {
   canvas: HTMLCanvasElement
@@ -18,21 +28,24 @@ const cache = new Map<string, BallSprite>()
 /**
  * The pixel-art ball (PixelBall.vue's look: outline, shade crescent, shine)
  * `cells` ball pixels wide, with its race's parts, baked once per size, fill
- * and race. Client-only; call after `preloadAll()` so part PNGs are in.
+ * and race. `spiked` adds the Spike trait's spikes around the rim (purely
+ * visual: the hitbox stays the ball). Client-only; call after `preloadAll()`
+ * so part PNGs are in.
  */
 export function useBallSprite() {
   const { drawSprite } = useSprites()
 
-  function ballSprite(cells: number, fill: string, raceId?: string): BallSprite {
-    const key = `${cells}|${fill}|${raceId ?? ''}`
+  function ballSprite(cells: number, fill: string, raceId?: string, spiked = false): BallSprite {
+    const key = `${cells}|${fill}|${raceId ?? ''}|${spiked}`
     const cached = cache.get(key)
     if (cached) return cached
     const look = raceId !== undefined ? RACE_LOOKS[raceId] : undefined
-    const margin = look ? RACE_PART_MARGIN : 0
+    const margin = look ? RACE_PART_MARGIN : spiked ? SPIKE_MARGIN : 0
     const canvas = document.createElement('canvas')
     canvas.width = canvas.height = cells + 2 * margin
     const g = canvas.getContext('2d')!
     g.imageSmoothingEnabled = false
+    if (spiked) drawSpikes(g, cells, margin)
     const parts = look?.parts ?? []
     for (const p of parts) if (p.layer === 'back') drawPart(g, p, cells, margin, fill)
     g.drawImage(plainBall(cells, fill), margin, margin)
@@ -89,6 +102,60 @@ export function useBallSprite() {
   }
 
   return { ballSprite }
+}
+
+/** Spike pixels for a spike pointing up and one pointing up-right, relative to
+ *  the first pixel outside the rim; the rest are rotations / mirrors. */
+const SPIKE_UP: readonly [number, number][] = [[-1, 0], [0, 0], [1, 0], [0, -1]]
+const SPIKE_UP_RIGHT: readonly [number, number][] = [[-1, 0], [0, 1], [0, 0], [1, 0], [0, -1], [1, -1], [2, -2]]
+
+/**
+ * Eight outlined steel spikes around a `cells`-wide ball centered in a canvas
+ * with `margin` on every side. Drawn before the ball so it covers their bases;
+ * the lower-right ones are shaded, like the ball.
+ */
+function drawSpikes(g: CanvasRenderingContext2D, cells: number, margin: number): void {
+  const size = cells + 2 * margin
+  const c = size / 2
+  const r = cells / 2
+  const inBall = (x: number, y: number) => Math.hypot(x + 0.5 - c, y + 0.5 - c) <= r
+  const color = new Map<string, string>() // "x,y" → spike color
+  for (let k = 0; k < 8; k++) {
+    const a = (k * Math.PI) / 4 // clockwise from up
+    const ux = Math.round(Math.sin(a))
+    const uy = -Math.round(Math.cos(a))
+    // Walk out from the center to the first pixel past the rim.
+    let s = 0
+    let x = 0
+    let y = 0
+    do {
+      s += 0.5
+      x = Math.floor(c + Math.sin(a) * s)
+      y = Math.floor(c - Math.cos(a) * s)
+    } while (inBall(x, y))
+    const diagonal = ux !== 0 && uy !== 0
+    const fill = ux + uy > 0 ? SPIKE_SHADE : SPIKE_FILL
+    for (const [ox, oy] of diagonal ? SPIKE_UP_RIGHT : SPIKE_UP) {
+      // Diagonals mirror the up-right spike; cardinals rotate the up one.
+      const [px, py] = diagonal
+        ? [ox * ux, -oy * uy]
+        : uy === -1 ? [ox, oy] : ux === 1 ? [-oy, ox] : uy === 1 ? [ox, -oy] : [oy, ox]
+      color.set(`${x + px},${y + py}`, fill)
+    }
+  }
+  // 1px outline around the spikes, outside the ball.
+  g.fillStyle = BALL_OUTLINE_COLOR
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      if (color.has(`${x},${y}`) || inBall(x, y)) continue
+      if ([[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => color.has(`${x + dx!},${y + dy!}`))) g.fillRect(x, y, 1, 1)
+    }
+  }
+  for (const [p, fill] of color) {
+    const [x, y] = p.split(',').map(Number)
+    g.fillStyle = fill
+    g.fillRect(x!, y!, 1, 1)
+  }
 }
 
 /** The ball itself, `cells` wide. The outline sits inside the hitbox. */

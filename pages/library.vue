@@ -5,10 +5,12 @@ import { useSettingsStore, sanitizeSettings } from '~/stores/settings'
 import { usePersistenceError } from '~/stores/example'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { raceRegistry } from '~/engine/races/registry'
+import { traitRegistry } from '~/engine/traits/registry'
 import { buildExport, exportToJson, parseImport } from '~/utils/libraryIo'
 import { spriteSource } from '~/assets/sprites/manifest'
 import '~/engine/weapons/index' // populate the registry
 import '~/engine/races/index'
+import '~/engine/traits/index'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -30,6 +32,13 @@ function raceName(ball: SavedBall): string {
   const id = ball.config.raceId
   if (id === undefined) return ''
   return raceRegistry.get(id)?.name ?? `${id} (unknown)`
+}
+
+/** Trait name, or '' for a ball without one. */
+function traitName(ball: SavedBall): string {
+  const id = ball.config.traitId
+  if (id === undefined) return ''
+  return traitRegistry.get(id)?.name ?? `${id} (unknown)`
 }
 
 /** The race supplies HP when set. */
@@ -140,7 +149,7 @@ async function importJson(ev: Event): Promise<void> {
               class="px-panel flex items-center gap-3.5 px-3 pb-3.5 pt-3"
             >
               <div class="relative h-16 w-[88px] shrink-0 bg-edg-night shadow-[inset_0_4px_0_#181425]" aria-hidden="true">
-                <PixelBall :fill="ballColor(ball)" :race-id="ball.config.raceId" class="absolute left-1.5 top-1.5 size-[52px]" />
+                <PixelBall :fill="ballColor(ball)" :race-id="ball.config.raceId" :trait-id="ball.config.traitId" class="absolute left-1.5 top-1.5 size-[52px]" />
                 <img
                   v-if="weaponSprite(ball)"
                   :src="weaponSprite(ball)!"
@@ -155,6 +164,9 @@ async function importJson(ev: Event): Promise<void> {
                 <p class="truncate text-xl leading-none text-edg-fog">
                   <template v-if="raceName(ball)">
                     {{ raceName(ball) }} ·
+                  </template>
+                  <template v-if="traitName(ball)">
+                    {{ traitName(ball) }} ·
                   </template>
                   {{ weaponNames(ball) }}
                 </p>

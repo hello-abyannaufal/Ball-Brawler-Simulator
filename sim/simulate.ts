@@ -4,6 +4,8 @@ import type { Ball } from '~/engine/entities'
 import { createRng, SEED_MAX } from '~/engine/rng'
 import { raceRegistry } from '~/engine/races/registry'
 import '~/engine/races/index' // populate the registry
+import { traitRegistry } from '~/engine/traits/registry'
+import '~/engine/traits/index' // populate the registry
 import { weaponRegistry } from '~/engine/weapons/registry'
 import '~/engine/weapons/index' // populate the registry
 import { DUEL_ARENA, placeForDuel } from '~/utils/duel'
@@ -44,6 +46,13 @@ export const AXES: readonly Axis[] = [
     fallback: 'human',
     name: (v) => raceRegistry.get(v)?.name ?? v,
     apply: (c, v) => ({ ...c, raceId: v }),
+  },
+  {
+    id: 'trait',
+    values: () => ['none', ...traitRegistry.ids()],
+    fallback: 'none',
+    name: (v) => traitRegistry.get(v)?.name ?? 'No trait',
+    apply: (c, v) => (v === 'none' ? c : { ...c, traitId: v }),
   },
 ]
 

@@ -128,24 +128,22 @@ Race  →  Weapon  →  Trait  →  Ability  →  (nama + Save)
 |---|---|---|
 | Race | Tubuh bola: HP, radius, speed, damageTaken, weaponSpin (`engine/races/`) | ✅ ada (Tier 1: Human, Elf, Orc; Tier 2: Dwarf, Goblin, Giant) |
 | Weapon | Senjata (sword, spear, hammer, bow, scythe, …) | ✅ ada |
-| Trait | Efek **pasif** (mis. vampiric, regen, spike) | ⏳ belum ada sistemnya |
+| Trait | Efek **pasif**, maks. 1 per bola (`engine/traits/`) | ✅ ada (Vampire, Spike), roda opsional |
 | Ability | Skill **aktif** dengan cooldown (mis. dash, invisibility) | ⏳ belum ada sistemnya |
 
 > **Penamaan (sudah dikonfirmasi):** **Trait = efek pasif** (bisa ke ball atau weapon),
 > **Ability = skill aktif dengan cooldown**. Istilah "Skill" lama tidak dipakai lagi.
 
-### 5.2 Hal yang perlu diputuskan sebelum menambah Trait / Ability
+### 5.2 Hal yang perlu diputuskan sebelum menambah Ability
 
-1. **Target Trait**: ke `ball` atau ke `weapon`? Satu Trait boleh valid untuk keduanya?
-   - Jika berbeda target, roda Trait mungkin perlu dipecah, atau ada langkah kecil
-     "terapkan ke ball/weapon" setelah undian.
-2. **Kecocokan**: apakah ada kombinasi terlarang (mis. Trait tertentu tidak berlaku untuk Bow)?
+Sudah diputuskan: **1 Trait + 1 Ability per bola**. Trait menempel ke bola; tampilannya
+boleh di senjata (Vampire: aura merah di senjata & proyektilnya; Spike: duri di bola,
+digambar prosedural tanpa aset).
+
+1. **Kecocokan**: apakah ada kombinasi terlarang (mis. Trait tertentu tidak berlaku untuk Bow)?
    - Usulan: tiap entri punya `isCompatible(picks)`, dan roda tahap berikutnya hanya
      menampilkan entri yang cocok dengan hasil tahap sebelumnya.
-3. **Jumlah slot**: berapa Trait/Ability per bola (mis. 1 weapon + 1 trait + 1 ability)?
-   Jika lebih dari satu, sebuah tahap bisa diulang (mis. `Trait 1`, `Trait 2`) tanpa
-   mengundi entri yang sama dua kali.
-4. **Pemicu Ability (aktif)**: karena duel berjalan otomatis, tiap Ability butuh aturan
+2. **Pemicu Ability (aktif)**: karena duel berjalan otomatis, tiap Ability butuh aturan
    kapan dipakai (mis. cooldown siap + musuh dalam jarak X), dan harus deterministik.
 
 ### 5.3 Peningkatan UX yang mungkin

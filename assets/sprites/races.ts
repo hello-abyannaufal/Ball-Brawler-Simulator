@@ -15,7 +15,6 @@ export interface RacePart {
 }
 
 export interface RaceLook {
-  iconId: string // roulette wheel icon, upright
   parts: readonly RacePart[]
 }
 
@@ -27,30 +26,24 @@ export const RACE_PART_MARGIN = 8
 
 export const RACE_LOOKS: Record<string, RaceLook> = {
   human: {
-    iconId: 'race-icon:human',
     parts: [{ spriteId: 'race:human-hair', anchor: 'top', pivot: { x: 6, y: 4 }, layer: 'front' }],
   },
   elf: {
-    iconId: 'race-icon:elf',
     parts: [{ spriteId: 'race:elf-ear', anchor: 'right', pivot: { x: 1, y: 5 }, layer: 'back', mirror: true }],
   },
   orc: {
-    iconId: 'race-icon:orc',
     parts: [{ spriteId: 'race:orc-tusks', anchor: 'bottom', pivot: { x: 5.5, y: 8 }, layer: 'front' }],
   },
   dwarf: {
-    iconId: 'race-icon:dwarf',
     parts: [
       { spriteId: 'race:dwarf-helm', anchor: 'top', pivot: { x: 6.5, y: 4 }, layer: 'front' },
       { spriteId: 'race:dwarf-beard', anchor: 'bottom', pivot: { x: 6.5, y: 6 }, layer: 'front' },
     ],
   },
   goblin: {
-    iconId: 'race-icon:goblin',
     parts: [{ spriteId: 'race:goblin-ear', anchor: 'right', pivot: { x: 2, y: 7 }, layer: 'back', mirror: true }],
   },
   giant: {
-    iconId: 'race-icon:giant',
     parts: [{ spriteId: 'race:giant-horn', anchor: 'upperRight', pivot: { x: 2, y: 8 }, layer: 'back', mirror: true }],
   },
 }

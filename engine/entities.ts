@@ -1,5 +1,6 @@
 import type { WeaponInstance, WeaponDefinition, Hitbox  } from './weapons/types'
 import type { ModifiableStat, StatusInstance } from './status'
+import type { TraitDefinition } from './traits/types'
 
 export type EntityId = number // monotonically increasing, stable order
 
@@ -33,6 +34,7 @@ export interface Ball extends BaseEntity {
   slam: { attackerId: EntityId; damage: number; steps: number; statusId?: string } | null
   weapons: WeaponInstance[]
   statusEffects: StatusInstance[]
+  trait: TraitDefinition | null // passive effect (Vampire, Spike), null when none
 }
 
 export interface Projectile extends BaseEntity {

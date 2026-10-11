@@ -6,7 +6,7 @@ import { activeBehaviorId, landsHeavy, weaponLunge } from '~/engine/weapons/beha
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { useSprites } from '~/composables/useSprites'
 import type { SoundEvent } from '~/composables/useAudio'
-import { BALL_PIXEL, useBallSprite } from '~/composables/useBallSprite'
+import { BALL_PIXEL, isSpiked, useBallSprite } from '~/composables/useBallSprite'
 import { hpBarFraction, stepsForElapsed } from '~/utils/duel'
 import { BALL_DEFAULT_FILL } from '~/utils/pixelBall'
 import '~/engine/weapons/index'
@@ -173,6 +173,24 @@ const SHOT_SOUNDS: Record<string, SoundEvent> = { revolver: 'shootBullet' }
 /** Status sounds, played when a status first lands (stacks 1). */
 const STATUS_SOUNDS: Record<string, SoundEvent> = { poison: 'poison', slow: 'slow', stun: 'stun' }
 
+/** Trait auras on the weapon (and its projectiles), per trait id: a pulsing
+ *  pixel outline. Render-only. */
+const WEAPON_AURA: Record<string, string> = { vampire: '#e43b44' }
+const AURA_OFFSET = 2 // arena px the outline sits out from the sprite
+const AURA_PULSE = 0.15 // rad per sim step
+/** Lifesteal: blood drawn from the struck ball into the healer, plus a "+N". */
+const DRAIN_COLORS = ['#e43b44', '#a22633', '#f6757a']
+const DRAIN_PER_HP = 3 // particles per HP healed
+const DRAIN_MIN = 4
+const DRAIN_MAX = 12
+const DRAIN_LIFE = 0.35 // seconds to reach the healer
+const POPUP_LIFE = 0.8 // seconds a "+N" floats
+const POPUP_RISE = 20 // arena px it rises over its life
+const POPUP_COLOR = '#63c74d'
+/** Spike damage: steel sparks where the spikes bit. */
+const SPIKE_SPARK_COLORS = ['#ffffff', '#c0cbdc', '#8b9bb4']
+const SPIKE_SPARKS = 8
+
 /** Per-source hit-flash (Req 16.5, 16.6): a 32×32 pixel sprite at the impact,
  *  shaped differently per source (projectile = cross burst). Weapon hits have
  *  none: their blood burst is the feedback. */
@@ -189,6 +207,16 @@ interface Particle {
   size: number // px, square
   color: string
   streak: boolean // draw a short pixel trail behind it (sparks)
+  drag?: number // velocity decay per second; default by `streak`
+  homeTo?: EntityId // steers into this ball, arriving as its life runs out
+}
+
+/** Floating "+N" over a healed ball. */
+interface Popup {
+  x: number
+  y: number
+  text: string
+  life: number // seconds remaining
 }
 
 interface Flash {
@@ -266,7 +294,7 @@ export function useVersusDuel(
   opts?: VersusOptions,
 ): VersusDuel {
   const reduced = !!opts?.reducedMotion
-  const { preloadAll, drawSprite } = useSprites()
+  const { preloadAll, drawSprite, drawSpriteSilhouette } = useSprites()
   const { ballSprite } = useBallSprite()
 
   const view: VersusView = {
@@ -286,6 +314,7 @@ export function useVersusDuel(
   let wallFlashes: WallFlash[] = []
   let deflected: Deflected[] = []
   let dying: Dying[] = []
+  let popups: Popup[] = []
   let endedFor = 0 // real seconds since the duel ended
   let cardShown = false
   let introT = 0 // real seconds since the intro began
@@ -327,9 +356,15 @@ export function useVersusDuel(
           const heavy = !slam && e.source.tag === 'weapon' && isHeavyHit(e.attackerId, e.targetId)
           if (!slam) sound(hitSound(e.source.tag, heavy, crit)) // a slam was heard at the wall
           if (reduced) return // decorative motion off; flash above still shows
+          if (e.source.tag === 'reflect' && at) spawnSparksAt(at.x, at.y, SPIKE_SPARKS, SPIKE_SPARK_COLORS)
           hitStop = heavy ? HEAVY_HIT_STOP : slam || crit ? HIT_STOP * 1.5 : HIT_STOP
           kick(CAMERA_KICK[heavy ? 'heavy' : slam ? 'slam' : crit ? 'crit' : 'hit'], at)
           spawnBlood(e.targetId, e.attackerId, crit ? e.amount * 2 : e.amount, slam ?? undefined)
+        } else if (e.type === 'heal') {
+          sound('drain')
+          const b = engine?.world.ballById(e.ballId)
+          if (b) popups.push({ x: b.position.x, y: b.position.y - b.radius - 26, text: `+${Math.max(1, Math.round(e.amount))}`, life: POPUP_LIFE })
+          if (!reduced && e.fromId !== '') spawnDrain(e.fromId, e.ballId, e.amount)
         } else if (e.type === 'ballDied') {
           sound('death')
           if (!reduced) {
@@ -389,7 +424,8 @@ export function useVersusDuel(
 
   function hitSound(tag: string, heavy: boolean, crit: boolean): SoundEvent {
     if (tag === 'dot') return 'hitDot'
-    if (tag === 'projectile' || tag === 'reflect') return 'hitProjectile'
+    if (tag === 'reflect') return 'spike'
+    if (tag === 'projectile') return 'hitProjectile'
     return crit ? 'hitCrit' : heavy ? 'hitHeavy' : 'hit'
   }
 
@@ -514,8 +550,8 @@ export function useVersusDuel(
     return { x: (pa.x + pb.x) / 2, y: (pa.y + pb.y) / 2 }
   }
 
-  /** Radial spark burst + white flash at a point (clashes, swatted arrows). */
-  function spawnSparksAt(cx: number, cy: number, count: number): void {
+  /** Radial spark burst + white flash at a point (clashes, swatted arrows, spikes). */
+  function spawnSparksAt(cx: number, cy: number, count: number, colors: readonly string[] = SPARK_COLORS): void {
     flashes.push({ x: cx, y: cy, life: CLASH_FLASH })
     for (let i = 0; i < count; i++) {
       const ang = Math.random() * Math.PI * 2
@@ -529,8 +565,37 @@ export function useVersusDuel(
         life,
         maxLife: life,
         size: 2,
-        color: SPARK_COLORS[Math.floor(Math.random() * SPARK_COLORS.length)]!,
+        color: colors[Math.floor(Math.random() * colors.length)]!,
         streak: true,
+      })
+    }
+  }
+
+  /** Blood flies from the drained ball into the healer, homing in so it
+   *  arrives as it fades. */
+  function spawnDrain(fromId: EntityId, toId: EntityId, amount: number): void {
+    const from = engine?.world.ballById(fromId)
+    const to = engine?.world.ballById(toId)
+    if (!from || !to) return
+    const count = Math.min(DRAIN_MAX, Math.max(DRAIN_MIN, Math.round(amount * DRAIN_PER_HP)))
+    for (let i = 0; i < count; i++) {
+      const a = Math.random() * Math.PI * 2
+      const r = Math.random() * from.radius * 0.8
+      const x = from.position.x + Math.cos(a) * r
+      const y = from.position.y + Math.sin(a) * r
+      const life = DRAIN_LIFE * (0.7 + Math.random() * 0.3)
+      particles.push({
+        x,
+        y,
+        vx: (to.position.x - x) / life,
+        vy: (to.position.y - y) / life,
+        life,
+        maxLife: life,
+        size: 2,
+        color: DRAIN_COLORS[Math.floor(Math.random() * DRAIN_COLORS.length)]!,
+        streak: true,
+        drag: 0,
+        homeTo: toId,
       })
     }
   }
@@ -654,7 +719,12 @@ export function useVersusDuel(
     const kBlood = Math.exp(-BLOOD_DRAG * dt)
     const kSpark = Math.exp(-SPARK_DRAG * dt)
     for (const p of particles) {
-      const k = p.streak ? kSpark : kBlood
+      const home = p.homeTo !== undefined ? engine?.world.ballById(p.homeTo) : undefined
+      if (home && p.life > dt) {
+        p.vx = (home.position.x - p.x) / p.life
+        p.vy = (home.position.y - p.y) / p.life
+      }
+      const k = p.drag !== undefined ? Math.exp(-p.drag * dt) : p.streak ? kSpark : kBlood
       p.x += p.vx * dt
       p.y += p.vy * dt
       p.vx *= k
@@ -692,6 +762,19 @@ export function useVersusDuel(
     shockwaves = shockwaves.filter((w) => w.life > 0)
     for (const f of wallFlashes) f.life -= dt
     wallFlashes = wallFlashes.filter((f) => f.life > 0)
+    for (const p of popups) p.life -= dt
+    popups = popups.filter((p) => p.life > 0)
+  }
+
+  /** "+N" heal popups, rising and fading out over their last half. */
+  function drawPopups(ctx: CanvasRenderingContext2D): void {
+    for (const p of popups) {
+      const t = 1 - p.life / POPUP_LIFE // 0 → 1
+      ctx.globalAlpha = Math.min(1, (p.life / POPUP_LIFE) * 2)
+      const rise = reduced ? 0 : Math.round(POPUP_RISE * t)
+      drawLabel(ctx, p.text, Math.round(p.x), Math.round(p.y) - rise, 8, POPUP_COLOR, 'center', EDG.wall)
+    }
+    ctx.globalAlpha = 1
   }
 
   /** Pixel ring per shockwave: radius grows, border thins to 0, clipped to the arena. */
@@ -868,7 +951,7 @@ export function useVersusDuel(
     const app = config?.appearance
     const fill = app?.type === 'color' ? app.value : BALL_DEFAULT_FILL // pattern/image handled later
     const cells = Math.max(4, Math.round((b.radius * 2) / BALL_PIXEL))
-    return ballSprite(cells, fill, config?.raceId).canvas
+    return ballSprite(cells, fill, config?.raceId, isSpiked(b.trait?.id)).canvas
   }
 
   /** A baked ball sprite centered on (x, y), at the ball pixel size. */
@@ -898,7 +981,29 @@ export function useVersusDuel(
     const lunge = weaponLunge(w)
     const x = anchor.x + Math.cos(w.angle) * lunge
     const y = anchor.y + Math.sin(w.angle) * lunge
+    drawAura(ctx, w.ownerId, spriteId, x, y, scale, w.angle, w.def.pivot)
     drawSprite(ctx, spriteId, x, y, scale, w.angle, w.def.pivot)
+  }
+
+  /** The owner's trait aura (Vampire) as a pulsing outline behind a sprite. */
+  function drawAura(
+    ctx: CanvasRenderingContext2D,
+    ownerId: EntityId,
+    spriteId: string,
+    x: number,
+    y: number,
+    scale: number,
+    angle: number,
+    pivot: { x: number; y: number } | undefined,
+  ): void {
+    const traitId = engine!.world.ballById(ownerId)?.trait?.id
+    const color = traitId !== undefined ? WEAPON_AURA[traitId] : undefined
+    if (!color) return
+    ctx.globalAlpha = reduced ? 0.8 : 0.6 + 0.35 * Math.sin(engine!.world.tick * AURA_PULSE)
+    for (const [dx, dy] of [[AURA_OFFSET, 0], [-AURA_OFFSET, 0], [0, AURA_OFFSET], [0, -AURA_OFFSET]] as const) {
+      drawSpriteSilhouette(ctx, spriteId, x + dx, y + dy, scale, angle, pivot, color)
+    }
+    ctx.globalAlpha = 1
   }
 
   /** Anchor the grip at the ball surface along the weapon angle, so the
@@ -962,6 +1067,7 @@ export function useVersusDuel(
     const sprite = weaponRegistry.get(p.weaponId)?.projectileSprite
     if (!sprite) return
     const angle = Math.atan2(p.velocity.y, p.velocity.x)
+    drawAura(ctx, p.ownerId, sprite.id, p.position.x, p.position.y, 2, angle, sprite.pivot)
     drawSprite(ctx, sprite.id, p.position.x, p.position.y, 2, angle, sprite.pivot)
   }
 
@@ -1057,6 +1163,7 @@ export function useVersusDuel(
     drawParticles(ctx)
     drawHitFlashes(ctx)
     drawHpBars(ctx)
+    drawPopups(ctx)
     if (opts?.showHitboxes) drawHitboxes(ctx)
     ctx.restore()
     drawFrame(ctx)
@@ -1330,6 +1437,7 @@ export function useVersusDuel(
     wallFlashes = []
     deflected = []
     dying = []
+    popups = []
     endedFor = 0
     cardShown = false
     introT = 0

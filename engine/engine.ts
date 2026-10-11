@@ -5,12 +5,13 @@ import type { WeaponInstance } from './weapons/types'
 import { initBehaviorState, type BehaviorContext, type HitResponse, type WeaponBehavior } from './weapons/behavior'
 import { World } from './world'
 import { createRng } from './rng'
-import { applyDamage } from './damage'
+import { applyDamage, heal } from './damage'
 import { resolveWallCollision, ballsOverlap, separateBalls, bounceBalls, applyKnockback, launchAway, launchAlong, pushAlong } from './physics'
 import { runStatusEffects, recomputeStats, hasControl, applyStatus } from './status'
 import { CooldownTable } from './cooldown'
 import { weaponRegistry } from './weapons/registry'
 import { ballStats } from './races/registry'
+import { traitRegistry } from './traits/registry'
 import {
   weaponHitsBall,
   weaponsOverlap,
@@ -18,7 +19,7 @@ import {
   weaponTouchesPath,
 } from './weapons/combat'
 
-export const engineVersion = '1.8.0' // non-empty string (Req 5.8)
+export const engineVersion = '1.9.0' // non-empty string (Req 5.8)
 export const TIMESTEP = 1 / 60 // seconds (Req 5.4)
 
 /** Knockback impulse magnitude applied on a weapon hit. */
@@ -27,6 +28,8 @@ const HIT_KNOCKBACK = 50
 const CLASH_COOLDOWN_STEPS = 10
 /** Base knockback magnitude applied to both balls on a weapon clash. */
 const CLASH_KNOCKBACK = 120
+/** Steps before the same Spike ball can hurt the same opponent by contact again. */
+const CONTACT_COOLDOWN_STEPS = 30
 /** Steps a disarmed weapon stays harmless. */
 const DISARM_STUN_STEPS = 18
 /** Per-step fraction of the gap between current speed and cruise speed that
@@ -75,6 +78,8 @@ export function createEngine(opts: EngineOptions): Engine {
       return { def, state: {} }
     })
     const stats = ballStats(bc) // race (or the config's own HP/radius)
+    const trait = bc.traitId !== undefined ? traitRegistry.get(bc.traitId) : null
+    if (trait === undefined) throw new Error(`Unknown trait id: ${bc.traitId}.`)
     const base = {
       cruiseSpeed: Math.hypot(bc.initialVelocity.x, bc.initialVelocity.y) * stats.speed,
       damageTaken: stats.damageTaken,
@@ -95,6 +100,7 @@ export function createEngine(opts: EngineOptions): Engine {
       weapons,
       statusEffects: [],
       slam: null,
+      trait,
     }
     world.add(ball)
 
@@ -350,6 +356,7 @@ export function createEngine(opts: EngineOptions): Engine {
           ...(mult > 1 ? { flags: { style: 'critical' as const } } : {}),
         })
         if (outcome.kind === 'applied') {
+          traitsAfterHit(owner, ball, outcome.applied, true)
           // Behaviors shape the follow-up (reap: rapid re-hits, no push;
           // heavy blow, thrust: launch + wall slam), then the engine applies it.
           const hit: HitResponse = { cooldownSteps: ctx.fullCooldownSteps, knockback: 'push' }
@@ -382,12 +389,14 @@ export function createEngine(opts: EngineOptions): Engine {
       const x = ball.position.x <= r ? 0 : ball.position.x >= width - r ? width : ball.position.x
       const y = ball.position.y <= r ? 0 : ball.position.y >= height - r ? height : ball.position.y
       world.emit({ type: 'wallSlam', ballId: ball.id, attackerId: slam.attackerId, x, y })
-      applyDamage(world, {
+      const outcome = applyDamage(world, {
         source: { tag: 'weapon' },
         attackerId: slam.attackerId,
         targetId: ball.id,
         amount: slam.damage,
       })
+      const attacker = world.ballById(slam.attackerId)
+      if (outcome.kind === 'applied' && attacker) traitsAfterHit(attacker, ball, outcome.applied, false)
       if (slam.statusId && ball.alive) applyStatus(world, ball.id, slam.statusId, slam.attackerId)
     }
   }
@@ -466,14 +475,48 @@ export function createEngine(opts: EngineOptions): Engine {
         if (dx * dx + dy * dy > sum * sum) continue
 
         p.alive = false // consumed on hit
-        applyDamage(world, {
+        const outcome = applyDamage(world, {
           source: { tag: 'projectile' },
           attackerId: p.ownerId, // credited to the owner (Req 10.10)
           targetId: ball.id,
           amount: p.damage,
         })
+        const shooter = world.ballById(p.ownerId)
+        if (outcome.kind === 'applied' && shooter) traitsAfterHit(shooter, ball, outcome.applied, false)
         if (p.knockback > 0 && ball.alive) pushAlong(ball, p.velocity.x, p.velocity.y, p.knockback)
         break
+      }
+    }
+  }
+
+  /**
+   * Trait reactions to a hit `attacker` landed on `target` for `applied` HP:
+   * Vampire heals the attacker; Spike deals part of a melee hit back.
+   */
+  function traitsAfterHit(attacker: Ball, target: Ball, applied: number, melee: boolean): void {
+    const lifesteal = attacker.trait?.lifesteal
+    if (lifesteal) heal(world, attacker.id, applied * lifesteal, target.id)
+    const thorns = target.trait?.thorns
+    if (thorns && melee) {
+      applyDamage(world, {
+        source: { tag: 'reflect' },
+        attackerId: target.id,
+        targetId: attacker.id,
+        amount: applied * thorns,
+        flags: { isReflected: true },
+      })
+    }
+  }
+
+  /** op 4 (contact part): a Spike ball hurts an opposing ball it bumped into. */
+  function applySpikeContacts(pairs: [Ball, Ball][]): void {
+    for (const [a, b] of pairs) {
+      for (const [self, other] of [[a, b], [b, a]] as const) {
+        const damage = self.trait?.contactDamage
+        if (!damage || !self.alive) continue
+        if (cooldowns.isActive(self.id, other.id)) continue
+        cooldowns.start(self.id, other.id, CONTACT_COOLDOWN_STEPS)
+        applyDamage(world, { source: { tag: 'reflect' }, attackerId: self.id, targetId: other.id, amount: damage })
       }
     }
   }
@@ -519,8 +562,10 @@ export function createEngine(opts: EngineOptions): Engine {
     moveProjectiles()
 
     // (2) detect collisions — stable `for i < j` over the entity array.
-    // Ball vs ball is purely physical: they bounce apart, no damage.
+    // Ball vs ball bounces apart; only a Spike trait turns contact into
+    // damage, applied in (4).
     const balls = world.aliveBalls()
+    const contacts: [Ball, Ball][] = []
     for (let i = 0; i < balls.length; i++) {
       for (let j = i + 1; j < balls.length; j++) {
         const a = balls[i]!
@@ -528,6 +573,7 @@ export function createEngine(opts: EngineOptions): Engine {
         if (ballsOverlap(a, b)) {
           separateBalls(a, b)
           bounceBalls(a, b) // reflect velocities so they don't stick
+          contacts.push([a, b])
         }
       }
     }
@@ -535,11 +581,12 @@ export function createEngine(opts: EngineOptions): Engine {
     // (3) resolve weapon clashes
     resolveWeaponClashes()
 
-    // (4) apply damage — weapon hits, projectiles.
+    // (4) apply damage — weapon hits, projectiles, wall slams, spike contact.
     // (5) apply knockback — bundled with each applied weapon hit.
     applyWeaponHits()
     applyProjectileHits()
     applyWallSlams(slammed)
+    applySpikeContacts(contacts)
 
     // (6) run status effects
     runStatusEffects(world)

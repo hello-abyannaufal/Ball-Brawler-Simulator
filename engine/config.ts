@@ -24,6 +24,8 @@ export interface BallConfig {
   /** Resolved against RaceRegistry; when set, the race's stats replace
    *  `maxHp` and `radius`. Absent on balls saved before races (neutral stats). */
   raceId?: string
+  /** Resolved against TraitRegistry; absent = no trait. */
+  traitId?: string
   appearance?: BallAppearance // visual-only, renderer concern
 }
 

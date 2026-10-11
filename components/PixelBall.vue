@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { RACE_LOOKS } from '~/assets/sprites/races'
-import { BALL_PIXEL, useBallSprite } from '~/composables/useBallSprite'
+import { BALL_PIXEL, isSpiked, useBallSprite } from '~/composables/useBallSprite'
 import { useSprites } from '~/composables/useSprites'
 import { raceRegistry } from '~/engine/races/registry'
 import {
@@ -16,10 +16,13 @@ const props = withDefaults(defineProps<{
   fill?: string
   /** Draws the race's parts on the ball, as in the arena. */
   raceId?: string
+  /** Draws the trait's look on the ball (Spike: spikes), as in the arena. */
+  traitId?: string
 }>(), {
   color: 'blue',
   fill: undefined,
   raceId: undefined,
+  traitId: undefined,
 })
 
 // 12×12 pixel circle, drawn on a 14×14 grid so a 1px outline fits around it.
@@ -27,6 +30,8 @@ const CIRCLE = rectsToPath(BALL_CIRCLE)
 const SHADE = rectsToPath(BALL_SHADE)
 const SHINE = rectsToPath(BALL_SHINE)
 const OUTLINE_OFFSETS = BALL_OUTLINE_OFFSETS.map(([x, y]) => `${x} ${y}`)
+/** Size a race-less baked ball is drawn at (a saved ball's default radius). */
+const DEFAULT_RADIUS = 32
 
 interface Palette { fill: string, shade: string, shine: string, shadeOpacity: number, shineOpacity: number }
 
@@ -48,21 +53,23 @@ const palette = computed<Palette>(() =>
     : PALETTES[props.color],
 )
 
-// A ball with a race is the arena's baked sprite (ball + parts, at the race's
-// size), cropped to its pixels. Client-only: the plain ball shows until then.
+// A ball with a race or spikes is the arena's baked sprite (ball + parts, at
+// the race's size), cropped to its pixels. Client-only: the plain ball shows
+// until then.
 const raceImage = ref<string | null>(null)
 const { preloadAll } = useSprites()
 const { ballSprite } = useBallSprite()
 
 async function bakeRace(): Promise<void> {
   const race = props.raceId !== undefined ? raceRegistry.get(props.raceId) : undefined
-  if (!race || !RACE_LOOKS[race.id]) {
+  const spiked = isSpiked(props.traitId)
+  if ((!race || !RACE_LOOKS[race.id]) && !spiked) {
     raceImage.value = null
     return
   }
   await preloadAll()
-  const cells = Math.max(4, Math.round((race.radius * 2) / BALL_PIXEL))
-  raceImage.value = cropped(ballSprite(cells, props.fill ?? BALL_DEFAULT_FILL, race.id).canvas)
+  const cells = Math.max(4, Math.round(((race?.radius ?? DEFAULT_RADIUS) * 2) / BALL_PIXEL))
+  raceImage.value = cropped(ballSprite(cells, props.fill ?? BALL_DEFAULT_FILL, race?.id, spiked).canvas)
 }
 
 /** Data URL of the canvas cropped to its non-transparent pixels. */
@@ -83,7 +90,7 @@ function cropped(src: HTMLCanvasElement): string {
 }
 
 onMounted(bakeRace)
-watch(() => [props.raceId, props.fill], bakeRace)
+watch(() => [props.raceId, props.traitId, props.fill], bakeRace)
 </script>
 
 <template>

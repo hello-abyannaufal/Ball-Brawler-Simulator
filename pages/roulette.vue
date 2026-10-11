@@ -3,7 +3,7 @@ import { ref, computed } from 'vue'
 import { spinWheel, EmptyRegistryError, type WheelResult } from '~/engine/roulette'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { raceRegistry } from '~/engine/races/registry'
-import { RACE_LOOKS } from '~/assets/sprites/races'
+import { traitRegistry } from '~/engine/traits/registry'
 import { SEED_MAX } from '~/engine/rng'
 import { useLibraryStore } from '~/stores/library'
 import { useRouletteStore, MAX_WEIGHT, type WheelKind } from '~/stores/roulette'
@@ -13,6 +13,7 @@ import type { WheelSlice } from '~/components/RouletteWheel.vue'
 import RouletteWheel from '~/components/RouletteWheel.vue'
 import '~/engine/weapons/index' // populate the registry
 import '~/engine/races/index'
+import '~/engine/traits/index'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -24,7 +25,6 @@ interface WheelEntry {
   id: string
   name: string
   spriteId?: string
-  spriteUp?: boolean
 }
 
 /**
@@ -33,16 +33,15 @@ interface WheelEntry {
  * Add a wheel (e.g. Trait, Ability) by appending a step here and its kind to
  * `WheelKind` — the wheel, weights, and flow need no other change.
  * `optional` steps can be switched off by the user; the ball then uses defaults.
+ * `named` wheels write each entry's name on its slice instead of an icon.
  */
-const STEPS: { kind: WheelKind; label: string; optional: boolean; entries: () => WheelEntry[] }[] = [
+const STEPS: { kind: WheelKind; label: string; optional: boolean; named?: boolean; entries: () => WheelEntry[] }[] = [
   {
     kind: 'race',
     label: 'Race',
     optional: true,
-    entries: () =>
-      raceRegistry.ids().map((id) => ({
-        id, name: raceRegistry.get(id)?.name ?? id, spriteId: RACE_LOOKS[id]?.iconId, spriteUp: true,
-      })),
+    named: true,
+    entries: () => raceRegistry.ids().map((id) => ({ id, name: raceRegistry.get(id)?.name ?? id })),
   },
   {
     kind: 'weapon',
@@ -53,6 +52,13 @@ const STEPS: { kind: WheelKind; label: string; optional: boolean; entries: () =>
         const def = weaponRegistry.get(id)
         return { id, name: def?.name ?? id, spriteId: def?.spriteId }
       }),
+  },
+  {
+    kind: 'trait',
+    label: 'Trait',
+    optional: true,
+    named: true,
+    entries: () => traitRegistry.ids().map((id) => ({ id, name: traitRegistry.get(id)?.name ?? id })),
   },
 ]
 
@@ -94,7 +100,12 @@ const entries = computed(() => {
 const slices = computed<WheelSlice[]>(() =>
   entries.value
     .filter((e) => e.weight > 0)
-    .map((e) => ({ id: e.id, weight: e.weight, color: e.color, spriteId: e.spriteId, spriteUp: e.spriteUp })),
+    .map((e) => ({
+      id: e.id,
+      weight: e.weight,
+      color: e.color,
+      ...(step.value.named ? { label: e.name } : { spriteId: e.spriteId }),
+    })),
 )
 
 function entryName(stepIdx: number, id: string): string {
@@ -153,6 +164,7 @@ function saveBall(): void {
     initialVelocity: { x: 120, y: 0 },
     weapons: [{ weaponId: weapon.id }],
     raceId: all.race?.id, // supplies HP and radius; off ⇒ defaults above
+    traitId: all.trait?.id, // off ⇒ no trait
     appearance: { type: 'color', value: '#feae34' },
   }
   const seeds = Object.fromEntries(Object.entries(all).map(([k, r]) => [k, r.seed]))

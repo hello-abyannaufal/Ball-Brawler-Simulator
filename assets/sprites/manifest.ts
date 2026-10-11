@@ -239,11 +239,6 @@ for (const [id, rows] of Object.entries(RACE_PARTS)) {
   SPRITE_MANIFEST[`race:${id}:proc`] = { kind: 'procedural', width, height, draw: gridProc(RACE_COLORS, rows) }
 }
 
-// Race icons (roulette wheel): the race's ball on a neutral fill, upright.
-for (const id of ['human', 'elf', 'orc', 'dwarf', 'goblin', 'giant']) {
-  SPRITE_MANIFEST[`race-icon:${id}`] = { kind: 'image', src: `/sprites/icons/races/${id}.png`, width: SIZE_ENTITY, height: SIZE_ENTITY }
-}
-
 /** Resolve a spriteId to its source, or the placeholder when unknown. */
 export function spriteSource(id: string): SpriteSource {
   return SPRITE_MANIFEST[id] ?? PLACEHOLDER

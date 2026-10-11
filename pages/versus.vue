@@ -12,11 +12,13 @@ import { useSettingsStore } from '~/stores/settings'
 import { useLibraryStore } from '~/stores/library'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { raceRegistry } from '~/engine/races/registry'
+import { traitRegistry } from '~/engine/traits/registry'
 import { DUEL_ARENA, defaultBalls, placeForDuel } from '~/utils/duel'
 import { BALL_DEFAULT_FILL } from '~/utils/pixelBall'
 import { spriteSource } from '~/assets/sprites/manifest'
 import '~/engine/weapons/index' // populate the registry
 import '~/engine/races/index'
+import '~/engine/traits/index'
 
 definePageMeta({ middleware: 'auth' })
 
@@ -30,7 +32,7 @@ interface Candidate {
   name: string
   source: 'default' | 'library'
   config: BallConfig
-  usable: boolean // false if it references a weapon or race this build doesn't have
+  usable: boolean // false if it references a weapon, race or trait this build doesn't have
 }
 
 // Candidate balls: the built-in defaults plus everything saved in the Library
@@ -39,6 +41,7 @@ const library = useLibraryStore()
 const candidates = computed<Candidate[]>(() => {
   const usable = (c: BallConfig) =>
     c.weapons.every((w) => weaponRegistry.has(w.weaponId)) && (c.raceId === undefined || raceRegistry.has(c.raceId))
+    && (c.traitId === undefined || traitRegistry.has(c.traitId))
   return [
     ...defaultBalls().map((c) => ({
       key: `default:${c.id}`,
@@ -148,11 +151,12 @@ function ballFill(c: BallConfig): string {
   return c.appearance?.type === 'color' ? c.appearance.value : BALL_DEFAULT_FILL
 }
 
-/** "Race · HP" line for a fighter card; the race supplies HP when set. */
+/** "Race · Trait · HP" line for a fighter card; the race supplies HP when set. */
 function statsLine(c: BallConfig): string {
   const race = c.raceId !== undefined ? raceRegistry.get(c.raceId) : undefined
+  const trait = c.traitId !== undefined ? traitRegistry.get(c.traitId) : undefined
   const hp = race?.maxHp || c.maxHp
-  return race ? `${race.name} · ${hp}` : `HP ${hp}`
+  return [race?.name, trait?.name, race ? hp : `HP ${hp}`].filter(Boolean).join(' · ')
 }
 
 /** "P1" / "P2" for selected fighters, in pick order. */
@@ -333,7 +337,7 @@ onBeforeUnmount(() => {
                 class="absolute -left-2.5 -top-2.5 bg-edg-gold px-1.5 py-1.5 font-pixel text-[10px] text-edg-ink shadow-[0_0_0_4px_#181425]"
               >{{ slotLabel(b.key) }}</span>
               <span class="relative block h-16 w-24" aria-hidden="true">
-                <PixelBall :fill="ballFill(b.config)" :race-id="b.config.raceId" class="absolute left-1 top-1 size-14" />
+                <PixelBall :fill="ballFill(b.config)" :race-id="b.config.raceId" :trait-id="b.config.traitId" class="absolute left-1 top-1 size-14" />
                 <img
                   v-if="weaponIcon(b.config)"
                   :src="weaponIcon(b.config)!"
@@ -343,7 +347,7 @@ onBeforeUnmount(() => {
               </span>
               <span class="font-pixel text-[11px] leading-snug">{{ b.name }}</span>
               <span class="text-xl leading-none text-edg-fog">
-                {{ b.usable ? statsLine(b.config) : 'Unknown weapon or race' }}
+                {{ b.usable ? statsLine(b.config) : 'Unknown weapon, race or trait' }}
               </span>
               <span
                 class="bg-edg-ink px-1.5 text-lg"
@@ -367,7 +371,7 @@ onBeforeUnmount(() => {
             :class="i === 1 ? 'order-3' : ''"
           >
             <span class="font-pixel text-[10px]" :class="i === 0 ? 'text-[#0099db]' : 'text-edg-red'">P{{ i + 1 }}</span>
-            <PixelBall v-if="slot" :fill="ballFill(slot.config)" :race-id="slot.config.raceId" class="size-16" />
+            <PixelBall v-if="slot" :fill="ballFill(slot.config)" :race-id="slot.config.raceId" :trait-id="slot.config.traitId" class="size-16" />
             <span v-else class="flex size-16 items-center justify-center font-pixel text-xl text-edg-mist" aria-hidden="true">?</span>
             <span class="max-w-full truncate font-pixel text-[10px]">{{ slot?.name ?? '—' }}</span>
           </div>
