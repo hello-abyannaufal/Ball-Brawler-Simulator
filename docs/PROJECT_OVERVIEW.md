@@ -120,8 +120,8 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
 
 ### 3.2 Skill unik per weapon
 
-- **Sword — Riposte** (`riposte`): setiap clash di mana sword *tidak* ter-disarm, riposte siap selama **60 step (1 s)**:
-  hit berikutnya **×2**, bilah berputar **2.5×** lebih cepat menghadap lawan, dan proyektil
+- **Sword — Riposte** (`riposte`): setiap clash (termasuk saat sword ter-disarm), riposte siap selama **60 step (1 s)**:
+  hit berikutnya **×2** dan melempar lawan lurus menjauh (`launchSpeed: 420`, tanpa wall slam), bilah berputar **2.5×** lebih cepat menghadap lawan, dan proyektil
   lawan yang disentuh **dipantulkan** balik ke penembaknya.
 - **Hammer — Heavy blow** (`heavyBlow`): terberat (30), jadi tidak pernah di-parry weapon lain; hit melempar bola lawan dengan
   `launchSpeed: 540` searah ayunan kepala hammer (tangen orbitnya, mengikuti arah spin); `reboundOnHit` (spin berbalik setelah kena); **Wall slam**: jika bola

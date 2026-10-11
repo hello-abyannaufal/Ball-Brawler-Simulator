@@ -12,9 +12,10 @@ export const sword: WeaponDefinition = {
   angularSpeed: 4.0,
   weight: 10,
   hitCooldown: 500,
-  // Any clash it isn't disarmed in → for 1 s: next hit ×2, blade spins 2.5×
-  // toward the opponent, and projectiles it touches are reflected at the shooter.
-  behaviors: [riposte({ multiplier: 2, windowSteps: 60, spinBoost: 2.5, reflectProjectiles: true })],
+  // Any clash (even a disarm) → for 1 s: next hit ×2 and knocks the ball away,
+  // blade spins 2.5× toward the opponent, and projectiles it touches are
+  // reflected at the shooter.
+  behaviors: [riposte({ multiplier: 2, windowSteps: 60, spinBoost: 2.5, reflectProjectiles: true, launchSpeed: 420 })],
   hitbox: { shape: 'segment', length: 48, thickness: 10 },
   spriteId: 'weapon:sword',
   pivot: { x: 7, y: 16 },
