@@ -130,7 +130,7 @@ Bola di slot ganjil (bola kedua) mulai dengan arah putar terbalik, agar mirror m
   shockwave abu-abu dari titik kontak dinding yang melebar sambil menipis sampai hilang.
 - **Spear — Thrust** (`thrust`): hit di **20% ujung** tombak menyodok lawan lurus menjauh
   (`launchSpeed: 480`) dan tombak **berhenti berputar 20 step** (0.33 s), seolah mendorong.
-  Jika lawan menabrak dinding dalam 45 step (0.75 s) → **+7 damage dan stun** (tertancap).
+  Jika lawan menabrak dinding dalam 45 step (0.75 s) → **+7 damage**.
   Aktif di setiap hit ujung; jaraknya hanya diatur hit cooldown biasa (600 ms). Hit di batang
   tombak = push biasa.
   Visual (renderer saja, hook `lunge`): tombak menyodok keluar 18 px searah porosnya (ujungnya

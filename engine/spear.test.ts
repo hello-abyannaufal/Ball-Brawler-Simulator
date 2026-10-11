@@ -30,7 +30,7 @@ function setup(at: { x: number; y: number }) {
 }
 
 describe('Spear thrust', () => {
-  it('a tip hit drives the ball into the wall, which pins it (+damage, stun)', () => {
+  it('a tip hit drives the ball into the wall, which adds damage (no stun)', () => {
     const { e, b, spear, events, heavy } = setup({ x: 200, y: 180 })
     e.step()
     expect(b.hp).toBe(94)
@@ -42,7 +42,7 @@ describe('Spear thrust', () => {
     for (let i = 0; i < 45 && !events.some((ev) => ev.type === 'wallSlam'); i++) e.step()
     expect(events).toContainEqual(expect.objectContaining({ type: 'wallSlam', ballId: b.id }))
     expect(b.hp).toBe(87)
-    expect(b.statusEffects.map((s) => s.defId)).toContain('stun')
+    expect(b.statusEffects.map((s) => s.defId)).not.toContain('stun')
   })
 
   it('the spear is drawn lunging out on a thrust, then back (render-only)', () => {
