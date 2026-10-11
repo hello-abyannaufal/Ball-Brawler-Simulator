@@ -24,6 +24,7 @@ export type SoundEvent =
   | 'death' // the losing ball starts blinking
   | 'shatter' // ... and breaks apart
   | 'win' | 'draw'
+  | 'countdown' | 'fight' // intro: 3-2-1 ticks, then the start
 
 export interface AudioLayer {
   /** Play a one-shot sound. No-op while muted. */
@@ -240,6 +241,14 @@ export function useAudio(initialEnabled = true): AudioLayer {
         tone('triangle', 131, 131, t, 0.65, 0.4)
         break
       }
+      case 'countdown': // short arcade tick
+        tone('square', 660, 660, t, 0.12, 0.22)
+        break
+      case 'fight': // higher, longer tick over a punch
+        tone('square', 1320, 1320, t, 0.3, 0.22)
+        tone('triangle', 165, 82, t, 0.3, 0.5)
+        noise(t, 0.15, 0.4, { filter: 'lowpass', freq: 1500, freqEnd: 200 })
+        break
       case 'draw': // a flat, falling pair
         tone('square', 392, 392, t, 0.18, 0.2)
         tone('square', 370, 370, t + 0.2, 0.3, 0.2)

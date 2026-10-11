@@ -49,6 +49,11 @@ export function stepsForElapsed(realSeconds: number, speed: number): number {
   return Math.floor(realSeconds * 60 * speed + 1e-9)
 }
 
+/** The duel arena, shared by Versus and the simulator. 3:4, so a 9:16
+ *  recording fits the HUD above it and leaves room below. Same area as the
+ *  old 360×360: a bigger arena favors ranged weapons (they keep their distance). */
+export const DUEL_ARENA = { width: 312, height: 416 }
+
 /** Fallback colors when two picked balls would look the same. */
 const DUEL_COLORS = ['#e43b44', '#0099db', '#63c74d', '#b55088']
 

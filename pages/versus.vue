@@ -12,7 +12,7 @@ import { useSettingsStore } from '~/stores/settings'
 import { useLibraryStore } from '~/stores/library'
 import { weaponRegistry } from '~/engine/weapons/registry'
 import { raceRegistry } from '~/engine/races/registry'
-import { defaultBalls, placeForDuel } from '~/utils/duel'
+import { DUEL_ARENA, defaultBalls, placeForDuel } from '~/utils/duel'
 import { BALL_DEFAULT_FILL } from '~/utils/pixelBall'
 import { spriteSource } from '~/assets/sprites/manifest'
 import '~/engine/weapons/index' // populate the registry
@@ -21,7 +21,7 @@ import '~/engine/races/index'
 definePageMeta({ middleware: 'auth' })
 
 // Arena configured into a Duel_Config before running (Req 11.4).
-const arena = { width: 360, height: 360 } // 1:1
+const arena = DUEL_ARENA
 // A fresh seed per Start and per Rematch, so every duel starts from new positions.
 const seed = ref(0)
 

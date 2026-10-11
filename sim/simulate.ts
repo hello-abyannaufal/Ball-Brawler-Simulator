@@ -6,7 +6,7 @@ import { raceRegistry } from '~/engine/races/registry'
 import '~/engine/races/index' // populate the registry
 import { weaponRegistry } from '~/engine/weapons/registry'
 import '~/engine/weapons/index' // populate the registry
-import { placeForDuel } from '~/utils/duel'
+import { DUEL_ARENA, placeForDuel } from '~/utils/duel'
 
 /**
  * Headless balance simulation: round-robin duels between fighters, no
@@ -16,7 +16,7 @@ import { placeForDuel } from '~/utils/duel'
  */
 
 /** Same arena as Versus. */
-export const ARENA = { width: 360, height: 360 }
+export const ARENA = DUEL_ARENA
 
 /**
  * One thing fighters can differ in. Axes not being compared use `fallback`.

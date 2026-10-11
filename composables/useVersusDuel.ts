@@ -52,7 +52,15 @@ const EDG = {
  *  pixel font, which is crisp at multiples of 8. */
 const FONT = '"Press Start 2P", monospace'
 const HUD_H = 56
-const HUD_GAP = 8 // between the HUD and the arena when it sits above it
+const HUD_GAP = 8 // between the HUD and the arena frame when it sits above it
+/** Arena frame, drawn outside the play area so a ball visibly bounces off its
+ *  inner edge. Steady (not moved by the camera). Colors go outer → inner, 2px each. */
+const FRAME_COLORS = ['#8b9bb4', '#5a6988', '#181425']
+const FRAME_W = FRAME_COLORS.length * 2
+/** Wall slam: the frame lights up along the struck wall around the contact. */
+const WALL_FLASH_LIFE = 0.35 // seconds
+const WALL_FLASH_LEN = 96 // arena px along the wall at the start, shrinking as it fades
+const WALL_FLASH_COLOR = '#ffffff'
 const HUD_VS_W = 28
 /** Status icons on the HUD's HP row: 8×8 art drawn at 2×. */
 const STATUS_ICON_SCALE = 2
@@ -119,7 +127,7 @@ const DEFLECT_DRAG = 5
 /** Death: the losing ball freezes and blinks white in slow motion, then
  *  shatters into its own pixels while its weapon tumbles away. Render-only.
  *  Times are real seconds. */
-const DEATH_BLINK = 0.45 // blinking, before the shatter
+const DEATH_BLINK = 0.7 // blinking, before the shatter
 const DEATH_BLINK_PERIOD = 0.15 // one white + one normal phase
 const DEATH_SLOWMO = 0.3 // × sim and effect time while it blinks
 const SHATTER_LIFE = 0.8
@@ -129,7 +137,36 @@ const DROPPED_LIFE = 1 // the dead ball's weapon tumbling away
 const DROPPED_SPEED = 60
 const DROPPED_SPIN = 9 // rad/s
 /** The winner card waits for the death to play out. */
-const WINNER_CARD_DELAY = 1.3
+const WINNER_CARD_DELAY = 1.55
+/** The winner card pops in (scales up from WINNER_POP_FROM) over this long. */
+const WINNER_POP = 0.25
+const WINNER_POP_FROM = 0.6
+
+/** Intro (part of the recording, the hook): both names over the dimmed arena
+ *  while a 3-2-1 counts down, then FIGHT! as the duel starts. Real seconds. */
+const INTRO_COUNT = 3
+const INTRO_BEAT = 0.5 // per count
+const INTRO_HOLD = INTRO_COUNT * INTRO_BEAT // the sim waits this long
+const INTRO_FIGHT = 0.5 // FIGHT! fades out over the first moments of the duel
+const INTRO_DIM = 0.6 // arena dimming behind the names
+
+/** Camera: render-only shake and zoom punches, in arena px, decaying in real
+ *  time (so they play on through a hit-stop). Off with reduced motion. */
+const SHAKE_DECAY = 10 // per second (exponential)
+const ZOOM_DECAY = 6
+const CAMERA_KICK = {
+  hit: { shake: 1.5, zoom: 0 },
+  heavy: { shake: 4, zoom: 0.06 },
+  slam: { shake: 5, zoom: 0.05 },
+  crit: { shake: 3, zoom: 0.04 },
+  parry: { shake: 2, zoom: 0 },
+  bounce: { shake: 1.5, zoom: 0 },
+  disarm: { shake: 3, zoom: 0.03 },
+  death: { shake: 6, zoom: 0 },
+} as const
+/** While a ball dies, the camera eases in on it and holds there. */
+const DEATH_ZOOM = 0.18
+const DEATH_ZOOM_EASE = 10 // per second
 
 /** Shot sound per weapon id (default: arrow). */
 const SHOT_SOUNDS: Record<string, SoundEvent> = { revolver: 'shootBullet' }
@@ -158,6 +195,12 @@ interface Flash {
   x: number
   y: number
   life: number
+}
+
+interface WallFlash {
+  side: 'left' | 'right' | 'top' | 'bottom'
+  at: number // contact position along the wall
+  life: number // seconds remaining
 }
 
 interface Shockwave {
@@ -240,10 +283,16 @@ export function useVersusDuel(
   let flashes: Flash[] = []
   let hitFlashes: HitFlash[] = []
   let shockwaves: Shockwave[] = []
+  let wallFlashes: WallFlash[] = []
   let deflected: Deflected[] = []
   let dying: Dying[] = []
   let endedFor = 0 // real seconds since the duel ended
   let cardShown = false
+  let introT = 0 // real seconds since the intro began
+  let introBeat = -1 // last countdown beat that played its sound
+  let shake = 0 // camera shake amplitude, arena px
+  let zoom = 0 // extra camera zoom (0 = none) around `focus`
+  let focus = { x: 0, y: 0 }
   let seenShots = new Set<EntityId>() // projectiles already heard firing
   const sound = (s: SoundEvent) => opts?.onSound?.(s)
   const whiteSprites = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>()
@@ -263,6 +312,7 @@ export function useVersusDuel(
           pendingSlam = { ballId: e.ballId, x: e.x, y: e.y }
           sound('slam')
           if (!reduced) shockwaves.push({ x: e.x, y: e.y, life: SHOCKWAVE_LIFE, ...SLAM_SHOCKWAVE })
+          flashWalls(e.x, e.y)
           return
         }
         if (e.type === 'damage' && e.amount > 0) {
@@ -278,10 +328,14 @@ export function useVersusDuel(
           if (!slam) sound(hitSound(e.source.tag, heavy, crit)) // a slam was heard at the wall
           if (reduced) return // decorative motion off; flash above still shows
           hitStop = heavy ? HEAVY_HIT_STOP : slam || crit ? HIT_STOP * 1.5 : HIT_STOP
+          kick(CAMERA_KICK[heavy ? 'heavy' : slam ? 'slam' : crit ? 'crit' : 'hit'], at)
           spawnBlood(e.targetId, e.attackerId, crit ? e.amount * 2 : e.amount, slam ?? undefined)
         } else if (e.type === 'ballDied') {
           sound('death')
-          if (!reduced) startDeath(e.ballId)
+          if (!reduced) {
+            startDeath(e.ballId)
+            kick(CAMERA_KICK.death)
+          }
         } else if (e.type === 'statusApplied') {
           const s = STATUS_SOUNDS[e.statusId]
           if (s && e.stacks === 1) sound(s)
@@ -294,12 +348,14 @@ export function useVersusDuel(
           sound('reflect')
           if (reduced) return
           hitStop = Math.max(hitStop, CLASH_HIT_STOP)
+          kick(CAMERA_KICK.parry)
           spawnSparksAt(e.x, e.y, SPARK_COUNT.disarm)
         } else if (e.type === 'weaponClash') {
           sound(e.outcome)
           if (reduced) return
           hitStop = Math.max(hitStop, CLASH_HIT_STOP)
           const at = clashPoint(e.a, e.b)
+          kick(CAMERA_KICK[e.outcome], at)
           if (!at) return
           spawnSparksAt(at.x, at.y, SPARK_COUNT[e.outcome])
           if (e.outcome === 'parry') shockwaves.push({ ...at, life: SHOCKWAVE_LIFE, ...PARRY_SHOCKWAVE })
@@ -308,6 +364,27 @@ export function useVersusDuel(
     })
     view.winner.value = undefined
     syncHp()
+  }
+
+  /** Shake the camera, and punch its zoom in on `at` if this kick is the stronger one. */
+  function kick(k: { shake: number; zoom: number }, at?: { x: number; y: number } | null): void {
+    shake = Math.max(shake, k.shake)
+    if (at && k.zoom > zoom) {
+      zoom = k.zoom
+      focus = { x: at.x, y: at.y }
+    }
+  }
+
+  function updateCamera(dt: number): void {
+    shake *= Math.exp(-SHAKE_DECAY * dt)
+    const d = dying[0]
+    if (d) {
+      // Ease in on the dying ball and hold while it blinks.
+      focus = { x: d.x, y: d.y }
+      zoom += (DEATH_ZOOM - zoom) * (1 - Math.exp(-DEATH_ZOOM_EASE * dt))
+    } else {
+      zoom *= Math.exp(-ZOOM_DECAY * dt)
+    }
   }
 
   function hitSound(tag: string, heavy: boolean, crit: boolean): SoundEvent {
@@ -613,6 +690,8 @@ export function useVersusDuel(
     hitFlashes = hitFlashes.filter((f) => f.life > 0)
     for (const w of shockwaves) w.life -= dt
     shockwaves = shockwaves.filter((w) => w.life > 0)
+    for (const f of wallFlashes) f.life -= dt
+    wallFlashes = wallFlashes.filter((f) => f.life > 0)
   }
 
   /** Pixel ring per shockwave: radius grows, border thins to 0, clipped to the arena. */
@@ -723,19 +802,59 @@ export function useVersusDuel(
   function clear(ctx: CanvasRenderingContext2D): void {
     const { width, height } = duel.arenaConfig
     // tiled floor
+    // One tile past every edge, so a camera shake never uncovers the
+    // letterbox inside the frame (the arena clip trims the rest).
     const tile = 32
-    for (let y = 0; y < height; y += tile) {
-      for (let x = 0; x < width; x += tile) {
+    for (let y = -tile; y < height + tile; y += tile) {
+      for (let x = -tile; x < width + tile; x += tile) {
         const alt = ((x / tile + y / tile) & 1) === 0
         ctx.fillStyle = alt ? EDG.floor : EDG.floorAlt
-        // Edge tiles are trimmed: the arena needn't be a multiple of the tile size.
-        ctx.fillRect(x, y, Math.min(tile, width - x), Math.min(tile, height - y))
+        ctx.fillRect(x, y, tile, tile)
       }
     }
-    // wall border
-    ctx.strokeStyle = EDG.wall
-    ctx.lineWidth = 4
-    ctx.strokeRect(0, 0, width, height)
+  }
+
+  /** The frame around the play area: concentric 2px rings, outer → inner. */
+  function drawFrame(ctx: CanvasRenderingContext2D): void {
+    const { width, height } = duel.arenaConfig
+    FRAME_COLORS.forEach((color, i) => {
+      const o = FRAME_W - i * 2 // this ring's outer offset from the play area
+      ctx.fillStyle = color
+      ctx.fillRect(-o, -o, width + o * 2, 2) // top
+      ctx.fillRect(-o, height + o - 2, width + o * 2, 2) // bottom
+      ctx.fillRect(-o, -o, 2, height + o * 2) // left
+      ctx.fillRect(width + o - 2, -o, 2, height + o * 2) // right
+    })
+    drawWallFlashes(ctx)
+  }
+
+  /** Light the frame on each wall a slam's contact point lies on (two in a corner). */
+  function flashWalls(x: number, y: number): void {
+    const { width, height } = duel.arenaConfig
+    if (x <= 0) wallFlashes.push({ side: 'left', at: y, life: WALL_FLASH_LIFE })
+    if (x >= width) wallFlashes.push({ side: 'right', at: y, life: WALL_FLASH_LIFE })
+    if (y <= 0) wallFlashes.push({ side: 'top', at: x, life: WALL_FLASH_LIFE })
+    if (y >= height) wallFlashes.push({ side: 'bottom', at: x, life: WALL_FLASH_LIFE })
+  }
+
+  /** A bright stretch of the frame around the contact, shrinking as it fades. */
+  function drawWallFlashes(ctx: CanvasRenderingContext2D): void {
+    const { width, height } = duel.arenaConfig
+    ctx.save()
+    ctx.fillStyle = WALL_FLASH_COLOR
+    for (const f of wallFlashes) {
+      const t = f.life / WALL_FLASH_LIFE // 1 → 0
+      ctx.globalAlpha = t
+      const half = Math.round((WALL_FLASH_LEN * (0.4 + 0.6 * t)) / 2)
+      const along = f.side === 'left' || f.side === 'right' ? height : width
+      const a = Math.max(-FRAME_W, Math.round(f.at) - half)
+      const b = Math.min(along + FRAME_W, Math.round(f.at) + half)
+      if (f.side === 'left') ctx.fillRect(-FRAME_W, a, FRAME_W, b - a)
+      else if (f.side === 'right') ctx.fillRect(width, a, FRAME_W, b - a)
+      else if (f.side === 'top') ctx.fillRect(a, -FRAME_W, b - a, FRAME_W)
+      else ctx.fillRect(a, height, b - a, FRAME_W)
+    }
+    ctx.restore()
   }
 
   /** The fighter picker's pixel-art ball with its race's parts, drawn at the
@@ -900,16 +1019,30 @@ export function useVersusDuel(
     ctx.imageSmoothingEnabled = false
 
     // The canvas is the output resolution (Settings / recording, Req 15.8):
-    // letterbox it, then fit the arena centered at the largest whole-number
+    // letterbox it, then fit the framed arena centered at the largest whole-number
     // scale (fractional only if the canvas is smaller than the arena).
     const { width: aw, height: ah } = duel.arenaConfig
     ctx.setTransform(1, 0, 0, 1, 0, 0)
     ctx.fillStyle = EDG.wall
     ctx.fillRect(0, 0, el.width, el.height)
-    const fit = Math.min(el.width / aw, el.height / ah)
+    const fit = Math.min(el.width / (aw + FRAME_W * 2), el.height / (ah + FRAME_W * 2)) // frame included
     const scale = fit >= 1 ? Math.floor(fit) : fit
-    ctx.setTransform(scale, 0, 0, scale, Math.round((el.width - aw * scale) / 2), Math.round((el.height - ah * scale) / 2))
+    const ox = Math.round((el.width - aw * scale) / 2)
+    const oy = Math.round((el.height - ah * scale) / 2)
+    ctx.setTransform(scale, 0, 0, scale, ox, oy)
 
+    // The arena, through the camera (zoom about `focus`, shake in whole
+    // canvas pixels), clipped to its frame so nothing spills into the letterbox.
+    ctx.save()
+    ctx.beginPath()
+    ctx.rect(0, 0, aw, ah)
+    ctx.clip()
+    if (!reduced) {
+      const z = 1 + zoom
+      const sx = Math.round((Math.random() * 2 - 1) * shake * scale)
+      const sy = Math.round((Math.random() * 2 - 1) * shake * scale)
+      ctx.setTransform(scale * z, 0, 0, scale * z, ox + sx + focus.x * scale * (1 - z), oy + sy + focus.y * scale * (1 - z))
+    }
     clear(ctx)
     for (const e of engine.world.entities) {
       if (e.kind === 'ball' && e.alive) drawBall(ctx, e)
@@ -925,11 +1058,14 @@ export function useVersusDuel(
     drawHitFlashes(ctx)
     drawHpBars(ctx)
     if (opts?.showHitboxes) drawHitboxes(ctx)
+    ctx.restore()
+    drawFrame(ctx)
 
     if (engine.ended && endedFor >= winnerCardDelay()) drawWinner(ctx)
+    drawIntro(ctx)
     // Above the arena when the letterbox has room (9:16, 4:5), else over its top.
-    const above = (el.height - ah * scale) / 2 / scale >= HUD_H + HUD_GAP
-    drawHud(ctx, above ? -HUD_H - HUD_GAP : HUD_GAP)
+    const above = (el.height - ah * scale) / 2 / scale >= HUD_H + HUD_GAP + FRAME_W
+    drawHud(ctx, above ? -HUD_H - HUD_GAP - FRAME_W : HUD_GAP)
   }
 
   function drawLabel(
@@ -1013,30 +1149,85 @@ export function useVersusDuel(
     })
   }
 
-  /** Result card in the middle of the arena. */
+  /** Largest pixel-font size in `sizes` at which `text` fits `maxW` (8 if none). */
+  function textSize(text: string, maxW: number, sizes: readonly number[]): number {
+    return sizes.find((s) => text.length * s <= maxW) ?? 8
+  }
+
+  /** Draw a centered label scaled by `s` about its own center (pop-in). */
+  function drawPopLabel(ctx: CanvasRenderingContext2D, text: string, cx: number, cy: number, size: number, s: number, color: string, shadow: string): void {
+    ctx.save()
+    ctx.translate(cx, cy)
+    ctx.scale(s, s)
+    drawLabel(ctx, text, 0, -size / 2, size, color, 'center', shadow)
+    ctx.restore()
+  }
+
+  /** A ball's solid color, as in `ballConfigs` (the start-time recolor included). */
+  function ballColor(i: number): string {
+    const app = duel.ballConfigs[i]?.appearance
+    return app?.type === 'color' ? app.value : BALL_DEFAULT_FILL
+  }
+
+  /** The hook: both names and a 3-2-1 over the dimmed arena, then FIGHT!. */
+  function drawIntro(ctx: CanvasRenderingContext2D): void {
+    if (introT >= INTRO_HOLD + INTRO_FIGHT) return
+    const { width, height } = duel.arenaConfig
+    const cx = width / 2
+    const mid = height / 2
+    ctx.save()
+    if (introT < INTRO_HOLD) {
+      ctx.globalAlpha = INTRO_DIM
+      ctx.fillStyle = EDG.wall
+      ctx.fillRect(0, 0, width, height)
+      ctx.globalAlpha = 1
+      drawLabel(ctx, 'WHO WINS?', cx, mid - 148, 16, EDG.sand, 'center', EDG.wall)
+      const names = [0, 1].map((i) => (opts?.names?.[i] ?? `Ball ${i + 1}`).toUpperCase())
+      names.forEach((n, i) => {
+        const size = textSize(n, width - 32, [32, 24, 16])
+        drawLabel(ctx, fit(n, Math.floor((width - 32) / 8)), cx, i === 0 ? mid - 104 : mid - 32 + (32 - size), size, ballColor(i), 'center', EDG.wall)
+      })
+      drawLabel(ctx, 'VS', cx, mid - 60, 16, EDG.hpLow, 'center', EDG.wall)
+      const p = (introT % INTRO_BEAT) / INTRO_BEAT // 0 → 1 within this beat
+      const pop = reduced ? 1 : 1 + 0.6 * (1 - p) ** 3
+      drawPopLabel(ctx, String(INTRO_COUNT - Math.floor(introT / INTRO_BEAT)), cx, mid + 72, 48, pop, EDG.gold, EDG.goldShadow)
+    } else {
+      const p = (introT - INTRO_HOLD) / INTRO_FIGHT
+      ctx.globalAlpha = 1 - p * p
+      drawPopLabel(ctx, 'FIGHT!', cx, mid, 40, reduced ? 1 : 1 + 0.3 * (1 - p), EDG.gold, EDG.goldShadow)
+    }
+    ctx.restore()
+  }
+
+  /** Result card in the middle of the arena: the winner's name big. Pops in. */
   function drawWinner(ctx: CanvasRenderingContext2D): void {
     const { width, height } = duel.arenaConfig
     const draw = engine!.winner === null
     const name = draw ? 'DRAW' : winnerLabel(engine!.winner!)
-    // Big type when the name fits the card, else the small size.
-    const cardW = width - 48
-    const size = name.length * 16 <= cardW - 24 ? 16 : 8
-    const cardH = draw ? 52 : 72
+    const cardW = width - 32
+    const size = textSize(name, cardW - 24, [32, 24, 16])
+    const cardH = draw ? size + 48 : size + 64
     const cx = width / 2
     const top = Math.round((height - cardH) / 2)
+    const p = Math.min(1, (endedFor - winnerCardDelay()) / WINNER_POP)
+    const back = 1 + 2.7 * (p - 1) ** 3 + 1.7 * (p - 1) ** 2 // easeOutBack: overshoots, settles at 1
+    const s = reduced ? 1 : WINNER_POP_FROM + (1 - WINNER_POP_FROM) * back
     ctx.save()
+    ctx.translate(cx, top + cardH / 2)
+    ctx.scale(s, s)
+    ctx.translate(-cx, -(top + cardH / 2))
     ctx.globalAlpha = WINNER_CARD_ALPHA
     ctx.fillStyle = EDG.gold
-    ctx.fillRect(24, top - 4, cardW, 4)
-    ctx.fillRect(24, top + cardH, cardW, 4)
+    ctx.fillRect(16, top - 4, cardW, 4)
+    ctx.fillRect(16, top + cardH, cardW, 4)
     ctx.fillStyle = EDG.wall
-    ctx.fillRect(24, top, cardW, cardH)
+    ctx.fillRect(16, top, cardW, cardH)
     ctx.globalAlpha = 1
     if (draw) {
       drawLabel(ctx, 'DRAW', cx, top + (cardH - size) / 2, size, EDG.gold, 'center', EDG.goldShadow)
     } else {
-      drawLabel(ctx, 'WINNER:', cx, top + 16, 8, EDG.sand, 'center')
-      drawLabel(ctx, fit(name, Math.floor((cardW - 24) / 8)), cx, top + 36, size, EDG.gold, 'center', EDG.goldShadow)
+      drawLabel(ctx, 'WINNER', cx, top + 18, 16, EDG.sand, 'center', EDG.wall)
+      drawLabel(ctx, fit(name, Math.floor((cardW - 24) / 8)), cx, top + 48, size, EDG.gold, 'center', EDG.goldShadow)
     }
     ctx.restore()
   }
@@ -1053,6 +1244,20 @@ export function useVersusDuel(
     const dt = (now - lastTime) / 1000
     lastTime = now
 
+    // Intro: the sim waits through the countdown; a sound per beat, FIGHT! last.
+    introT += dt
+    const beat = Math.min(INTRO_COUNT, Math.floor(introT / INTRO_BEAT))
+    if (beat !== introBeat) {
+      introBeat = beat
+      sound(beat < INTRO_COUNT ? 'countdown' : 'fight')
+    }
+    if (introT < INTRO_HOLD) {
+      render()
+      raf = requestAnimationFrame(frame)
+      return
+    }
+
+    updateCamera(dt)
     updateHitFlashes(dt) // real time, so the flash lasts HIT_FLASH even in a hit-stop
     // A dying ball slows the whole scene (sim and effects) while it blinks.
     const timeScale = dying.length > 0 ? DEATH_SLOWMO : 1
@@ -1122,10 +1327,15 @@ export function useVersusDuel(
     flashes = []
     hitFlashes = []
     shockwaves = []
+    wallFlashes = []
     deflected = []
     dying = []
     endedFor = 0
     cardShown = false
+    introT = 0
+    introBeat = -1
+    shake = 0
+    zoom = 0
     seenShots = new Set()
     pendingSlam = null
     raf = requestAnimationFrame(frame)
