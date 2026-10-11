@@ -6,6 +6,7 @@ import { SEED_MAX } from '~/engine/rng'
 import { useVersusDuel, type VersusDuel } from '~/composables/useVersusDuel'
 import { useAudio } from '~/composables/useAudio'
 import { createRecorder, RecordingUnsupportedError, type Recorder } from '~/composables/useRecorder'
+import { remuxMp4 } from '~/composables/mp4Remux'
 import { useRecordingsStore } from '~/stores/recordings'
 import { useSettingsStore } from '~/stores/settings'
 import { useLibraryStore } from '~/stores/library'
@@ -275,8 +276,17 @@ async function finishRecording(): Promise<void> {
   recorder = null
   autoRecording.value = false
   if (!blob) return
+  let file = blob
+  if (blob.type.includes('mp4')) {
+    try {
+      file = await remuxMp4(blob)
+    } catch {
+      // Keep the raw recording: it still plays on desktop.
+      recError.value = 'Could not convert audio for phones; saved the original.'
+    }
+  }
   try {
-    await recordings.addRecording(blob, {
+    await recordings.addRecording(file, {
       name: `Duel ${new Date().toLocaleString()}`,
       durationMs,
     })

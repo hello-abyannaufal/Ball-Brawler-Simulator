@@ -22,6 +22,11 @@ export default defineNuxtConfig({
       ],
     },
   },
+  vite: {
+    // ffmpeg.wasm spawns its worker via new URL(..., import.meta.url), which
+    // breaks when Vite pre-bundles the package.
+    optimizeDeps: { exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'] },
+  },
   typescript: {
     typeCheck: true,
     strict: true,

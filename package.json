@@ -20,6 +20,9 @@
   },
   "dependencies": {
     "@adonisjs/hash": "^9.1.1",
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "@pinia/nuxt": "^0.5.5",
     "drizzle-orm": "^0.45.3",
     "nuxt": "^3.14.0",
