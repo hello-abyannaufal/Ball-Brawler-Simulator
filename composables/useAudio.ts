@@ -77,6 +77,13 @@ export function useAudio(initialEnabled = true): AudioLayer {
       // Separate tap for recording so the file also gets audio (Req 14.5).
       dest = ctx.createMediaStreamDestination()
       master.connect(dest)
+      // With no sound playing, Chrome stops feeding the stream, and the MP4
+      // recorder leaves a gap in the audio track: phones then play the audio
+      // ahead of the video. A source outputting silence keeps it continuous.
+      const keepAlive = ctx.createConstantSource()
+      keepAlive.offset.value = 0
+      keepAlive.connect(dest)
+      keepAlive.start()
       // One second of white noise, shared by every noise burst.
       noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate)
       const d = noiseBuf.getChannelData(0)
